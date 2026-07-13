@@ -1,0 +1,87 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "UrLang",
+  "scopeName": "source.urlang",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#constants" },
+    { "include": "#function-declaration" },
+    { "include": "#function-call" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.urlang", "match": "//.*$" },
+        { "name": "comment.block.urlang", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.urlang",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [{ "name": "constant.character.escape.urlang", "match": "\\\\." }]
+        },
+        {
+          "name": "string.quoted.single.urlang",
+          "begin": "'",
+          "end": "'",
+          "patterns": [{ "name": "constant.character.escape.urlang", "match": "\\\\." }]
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.urlang",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.urlang",
+          "match": "\\b(agar|warna|jab|tak|bas|agla|wapas|har|mein|koshish|pakro|akhir|phenko|intezar)\\b"
+        },
+        {
+          "name": "storage.type.urlang",
+          "match": "\\b(rakho|pakka|kaam|qisim|jamaat|waris)\\b"
+        },
+        {
+          "name": "keyword.other.urlang",
+          "match": "\\b(bolo|bhejo|lao|se|bahar|asal|sab|naya|buzurg)\\b"
+        },
+        {
+          "name": "variable.language.urlang",
+          "match": "\\b(yeh)\\b"
+        }
+      ]
+    },
+    "types": {
+      "name": "support.type.urlang",
+      "match": "\\b(adad|lafz|bool|koi|kuchnahi|Wada)\\b"
+    },
+    "constants": {
+      "name": "constant.language.urlang",
+      "match": "\\b(sach|jhoot|khaali)\\b"
+    },
+    "function-declaration": {
+      "match": "\\b(kaam)\\s+([A-Za-z_$][A-Za-z0-9_$]*)",
+      "captures": {
+        "1": { "name": "storage.type.urlang" },
+        "2": { "name": "entity.name.function.urlang" }
+      }
+    },
+    "function-call": {
+      "match": "\\b([A-Za-z_$][A-Za-z0-9_$]*)\\s*(?=\\()",
+      "name": "entity.name.function.urlang"
+    },
+    "operators": {
+      "name": "keyword.operator.urlang",
+      "match": "(==|!=|<=|>=|&&|\\|\\||[+\\-*/%=<>!])"
+    }
+  }
+}

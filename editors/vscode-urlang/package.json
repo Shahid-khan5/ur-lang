@@ -1,0 +1,52 @@
+{
+  "name": "urlang-vscode",
+  "displayName": "UrLang",
+  "description": "UrLang (.ur) language support: syntax highlighting, live type errors, hover types, autocomplete, go-to-definition.",
+  "version": "1.0.0",
+  "publisher": "ur-lang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shahid-khan5/ur-lang.git",
+    "directory": "editors/vscode-urlang"
+  },
+  "bugs": {
+    "url": "https://github.com/Shahid-khan5/ur-lang/issues"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:urlang"],
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "urlang",
+        "aliases": ["UrLang", "urlang"],
+        "extensions": [".ur"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "urlang",
+        "scopeName": "source.urlang",
+        "path": "./syntaxes/urlang.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "UrLang",
+      "properties": {
+        "urlang.lspPath": {
+          "type": "string",
+          "default": "urlang",
+          "description": "Path to the urlang CLI used to start the language server (`urlang lsp`)."
+        }
+      }
+    }
+  }
+}

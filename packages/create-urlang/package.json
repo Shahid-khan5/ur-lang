@@ -1,0 +1,26 @@
+{
+  "name": "create-urlang",
+  "version": "1.0.0",
+  "description": "Scaffold UrLang projects: npm create urlang my-app -- --template vite|tauri|electron",
+  "type": "module",
+  "bin": {
+    "create-urlang": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "templates"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shahid-khan5/ur-lang.git",
+    "directory": "packages/create-urlang"
+  },
+  "homepage": "https://github.com/Shahid-khan5/ur-lang#readme",
+  "bugs": {
+    "url": "https://github.com/Shahid-khan5/ur-lang/issues"
+  },
+  "license": "MIT"
+}

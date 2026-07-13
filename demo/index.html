@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ur">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UrLang Demo — Ginti (Counter)</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: system-ui, sans-serif;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        margin: 0;
+      }
+      .card { text-align: center; }
+      #ginti { font-size: 4rem; font-variant-numeric: tabular-nums; margin: 0.5rem 0; }
+      button { font-size: 1.25rem; padding: 0.5rem 1.25rem; margin: 0 0.25rem; cursor: pointer; }
+      #paigham { min-height: 1.5em; opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>UrLang Ginti</h1>
+      <p id="ginti">0</p>
+      <button id="kam">− kam</button>
+      <button id="zyada">+ zyada</button>
+      <p id="paigham"></p>
+      <hr />
+      <button id="load">sheher lao</button>
+      <p id="status"></p>
+      <ul id="sheher-list"></ul>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

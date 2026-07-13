@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UrLang Playground</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #1e1f24; --panel: #26272e; --text: #e8e8ea; --dim: #9a9aa5;
+    --accent: #2fbf71; --err: #ff6b6b; --border: #3a3b44;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f5f7; --panel: #ffffff; --text: #1b1b1f; --dim: #66666e; --border: #d9d9e0; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, sans-serif; height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 1rem;
+    padding: .6rem 1rem; border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 1.05rem; margin: 0; }
+  header .tag { color: var(--dim); font-size: .8rem; }
+  header .spacer { flex: 1; }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: .45rem 1.1rem; font-size: .9rem; font-weight: 600; cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--dim); border: 1px solid var(--border); }
+  main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+  .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .pane + .pane { border-left: 1px solid var(--border); }
+  .pane-title {
+    padding: .35rem .8rem; font-size: .72rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--border);
+  }
+  textarea, pre {
+    flex: 1; margin: 0; padding: .8rem; border: 0; resize: none; overflow: auto;
+    background: var(--panel); color: var(--text);
+    font: 13.5px/1.55 ui-monospace, "Cascadia Code", Consolas, monospace;
+    white-space: pre; outline: none; tab-size: 2;
+  }
+  .right { display: grid; grid-template-rows: 1fr 1fr; min-height: 0; }
+  .right .pane + .pane { border-left: 0; border-top: 1px solid var(--border); }
+  #output.error { color: var(--err); }
+  .ok { color: var(--accent); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>UrLang Playground</h1>
+    <span class="tag">typed &middot; compiles to JS &middot; compiler runs in your browser</span>
+    <span class="spacer"></span>
+    <button class="secondary" id="clearBtn">Clear</button>
+    <button id="runBtn">Chalao ▶</button>
+  </header>
+  <main>
+    <div class="pane">
+      <div class="pane-title">UrLang (.ur)</div>
+      <textarea id="editor" spellcheck="false"></textarea>
+    </div>
+    <div class="right">
+      <div class="pane">
+        <div class="pane-title">Generated JavaScript</div>
+        <pre id="jsOut"></pre>
+      </div>
+      <div class="pane">
+        <div class="pane-title">Output</div>
+        <pre id="output"></pre>
+      </div>
+    </div>
+  </main>
+
+<script type="module">
+import { compile, formatDiagnostics } from "./compiler.js";
+
+const editor = document.getElementById("editor");
+const jsOut = document.getElementById("jsOut");
+const output = document.getElementById("output");
+
+editor.value = `// UrLang — Urdu-flavored, typed, compiles to JavaScript.
+kaam fib(n: adad): adad {
+  agar (n < 2) { wapas n; }
+  wapas fib(n - 1) + fib(n - 2);
+}
+
+rakho i = 0;
+jab tak (i <= 10) {
+  bolo "fib(" + i + ") =", fib(i);
+  i += 1;
+}
+
+pakka shakhs = { naam: "Ali", sheher: "Lahore" };
+bolo shakhs.naam + " " + shakhs.sheher + " se hai";
+`;
+
+let debounce;
+function recompile() {
+  const src = editor.value;
+  const result = compile(src, { fileName: "playground.ur" });
+  if (result.code === null) {
+    jsOut.textContent = "";
+    output.textContent = formatDiagnostics(result.diagnostics, src, "playground.ur");
+    output.className = "error";
+    return null;
+  }
+  jsOut.textContent = result.code;
+  output.className = "";
+  return result.code;
+}
+
+function run() {
+  const code = recompile();
+  if (code === null) return;
+  const logs = [];
+  const original = console.log;
+  console.log = (...args) => logs.push(args.map(format).join(" "));
+  try {
+    new Function(code)();
+    output.textContent = logs.join("\n") || "(koi output nahi)";
+  } catch (e) {
+    output.textContent = "Runtime error: " + e.message;
+    output.className = "error";
+  } finally {
+    console.log = original;
+  }
+}
+
+function format(v) {
+  if (typeof v === "string") return v;
+  try { return JSON.stringify(v); } catch { return String(v); }
+}
+
+editor.addEventListener("input", () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(recompile, 200);
+});
+editor.addEventListener("keydown", (e) => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const { selectionStart: s, selectionEnd } = editor;
+    editor.setRangeText("  ", s, selectionEnd, "end");
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") run();
+});
+document.getElementById("runBtn").addEventListener("click", run);
+document.getElementById("clearBtn").addEventListener("click", () => {
+  output.textContent = "";
+  output.className = "";
+});
+
+recompile();
+run();
+</script>
+</body>
+</html>

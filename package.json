@@ -1,0 +1,65 @@
+{
+  "name": "ur-lang",
+  "version": "1.0.0",
+  "description": "UrLang — an Urdu-flavored, statically type-checked language that compiles to JavaScript. Works everywhere JS works: Node, browsers, Electron, Tauri.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "urlang": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./vite": "./dist/vite-plugin.js",
+    "./dts": "./dist/dts.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SPEC.md",
+    "docs"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc -p tsconfig.build.json",
+    "bench": "tsx bench/bench.ts",
+    "playground:build": "esbuild src/index.ts --bundle --format=esm --outfile=playground/compiler.js --minify"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shahid-khan5/ur-lang.git"
+  },
+  "homepage": "https://github.com/Shahid-khan5/ur-lang#readme",
+  "bugs": {
+    "url": "https://github.com/Shahid-khan5/ur-lang/issues"
+  },
+  "keywords": [
+    "urdu",
+    "language",
+    "compiler",
+    "transpiler",
+    "typed",
+    "vite-plugin",
+    "tauri",
+    "electron",
+    "bhailang"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^29.1.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.0"
+  },
+  "optionalDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

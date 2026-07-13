@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+.vscode/
+.DS_Store
+
+# Rust build output (Tauri apps)
+target/
+
+# Playground compiler bundle is generated (npm run playground:build)
+playground/compiler.js
+
+# Packaged artifacts
+*.tgz
+*.vsix
