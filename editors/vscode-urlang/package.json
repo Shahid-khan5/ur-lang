@@ -3,7 +3,7 @@
   "displayName": "UrLang",
   "description": "UrLang (.ur) language support: syntax highlighting, live type errors, hover types, autocomplete, go-to-definition.",
   "version": "1.0.0",
-  "publisher": "ur-lang",
+  "publisher": "shahidkhandev",
   "license": "MIT",
   "repository": {
     "type": "git",
