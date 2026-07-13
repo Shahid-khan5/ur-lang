@@ -1,7 +1,7 @@
 {
   "name": "create-urlang",
-  "version": "1.1.0",
-  "description": "Scaffold UrLang projects: npm create urlang my-app -- --template vite|react|tauri|tauri-react|electron",
+  "version": "1.2.0",
+  "description": "Scaffold UrLang projects: npm create urlang my-app -- --template vite|react|svelte|node|express|bun|tauri|tauri-react|tauri-svelte|electron",
   "type": "module",
   "bin": {
     "create-urlang": "./index.js"

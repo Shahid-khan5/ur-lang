@@ -1,0 +1,18 @@
+{
+  "name": "urlang-express-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "urlang run src/main.ur",
+    "build": "urlang build src/main.ur -o dist",
+    "start": "node dist/main.js",
+    "check": "urlang check src/main.ur"
+  },
+  "dependencies": {
+    "express": "^5.0.0"
+  },
+  "devDependencies": {
+    "ur-lang": "^1.2.0"
+  }
+}

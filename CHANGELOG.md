@@ -12,6 +12,19 @@ UrLang versions the **language** and the **toolchain** together:
 
 Covered by semver: everything in `SPEC.md`, `docs/errors.md` codes, CLI commands, the three package exports, and the shape of `compile()`'s options/result. **Not covered:** compiler internals (direct imports from `dist/` paths other than the documented exports), generated-JS formatting, and the exact text of error messages.
 
+## [1.2.0] — 2026-07-13
+
+### Added
+
+- **Bun support**: `ur-lang/bun` is a Bun loader plugin — preload it (`bunfig.toml`) and Bun imports `.ur` / `.urx` files **directly**, compiling and type-checking them on import, exactly as it does TypeScript. No build step; a type error stops the import.
+- **Trailing commas** are accepted wherever a comma-separated list is closed by a bracket: object and array literals, call arguments, parameter lists, `naya`/`buzurg` calls, import/export lists, object types, and type parameters. Multi-line code and formatters depend on this.
+- **Standard globals work with `naya`**: `naya Date()`, `naya URL(…)`, `naya Map()` no longer need a `bahar` declaration. The known-globals set now also covers `URL`, `URLSearchParams`, `Request`, `Response`, `Headers`, `AbortController`, `Map`, `Set`, `RegExp`, `Symbol`, `TextEncoder`, `TextDecoder`, `structuredClone`, `crypto`, and friends. Runtime-specific globals (`Bun`, `process`, `Deno`) still want `bahar`, so a file says which runtime it assumes.
+- **Five new templates**: `node` (plain Node server), `express`, `bun`, `svelte`, and `tauri-svelte` — bringing the set to ten. Each is exercised by a test that actually runs it: the servers are started and hit over HTTP; the Svelte app is built with the real Vite/Svelte toolchain and clicked in a real DOM.
+
+### Fixed
+
+- **`urlang build` now follows imports.** It compiled only the files named on the command line, so a multi-module project emitted an entry `main.js` importing a `greet.js` that was never written — `node dist/main.js` then died with `ERR_MODULE_NOT_FOUND`. It now builds the whole import graph, as `urlang run` and `--watch` already did.
+
 ## [1.1.0] — 2026-07-13
 
 ### Added — JSX (`.urx` files)

@@ -114,6 +114,27 @@ describe("create-urlang", () => {
     }
   });
 
+  it("scaffolds every advertised template with compiling sources", () => {
+    // The scaffolder advertises whatever is in templates/ — so every one of them
+    // must produce sources that actually compile.
+    const templatesRoot = path.join(projectRoot, "packages", "create-urlang", "templates");
+    const templates = fs.readdirSync(templatesRoot);
+    expect(templates).toEqual(
+      expect.arrayContaining(["vite", "react", "svelte", "node", "express", "bun", "tauri", "tauri-react", "tauri-svelte", "electron"])
+    );
+    for (const template of templates) {
+      const app = scaffold(`har-${template}`, template);
+      const sources = urFilesUnder(app);
+      expect(sources.length, `${template} has no .ur sources`).toBeGreaterThan(0);
+      for (const f of sources) {
+        const result = compile(fs.readFileSync(f, "utf8"), { fileName: f, loadModule: fsModuleLoader });
+        // The electron template's renderer needs its ambient bridge; covered above.
+        if (template === "electron") continue;
+        expect(result.diagnostics.map((d) => d.message), f).toEqual([]);
+      }
+    }
+  }, 60000);
+
   it("refuses to overwrite a non-empty directory", () => {
     fs.mkdirSync(path.join(dir, "bhara"), { recursive: true });
     fs.writeFileSync(path.join(dir, "bhara", "x.txt"), "kuch");

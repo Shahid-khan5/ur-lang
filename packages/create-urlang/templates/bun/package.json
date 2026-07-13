@@ -1,0 +1,15 @@
+{
+  "name": "urlang-bun-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/main.ur",
+    "start": "bun run src/main.ur",
+    "build": "bun build src/main.ur --outdir dist --target bun",
+    "check": "urlang check src/main.ur"
+  },
+  "devDependencies": {
+    "ur-lang": "^1.2.0"
+  }
+}

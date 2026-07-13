@@ -10,6 +10,7 @@ Version 1.1 — covers the syntax and typing rules implemented by the reference 
 - **Strings:** `"..."` or `'...'` with escapes `\n \t \r \\ \" \' \0`.
 - **Template strings:** `` `text ${expr} text` `` with escapes ``\` \$ \\ \n \t \r``; may span lines.
 - **Reserved words:** `rakho pakka bolo agar warna jab tak bas agla kaam wapas sach jhoot khaali bhejo lao se bahar har mein koshish pakro akhir phenko intezar qisim asal sab jamaat naya yeh waris buzurg`.
+- **Trailing commas** are permitted before the closing bracket of any comma-separated list (arguments, parameters, array/object literals, import/export lists, object types, type parameters).
 - **File extensions:** `.ur`, and `.urx` for files containing JSX. In a `.urx` file, a `<` in operand position (i.e. not after a value) followed by a name or `>` opens a JSX element; everywhere else `<` is less-than. `.ur` files never lex JSX, so `a < b` is unambiguous there.
 
 ## 2. Grammar (EBNF)

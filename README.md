@@ -36,8 +36,19 @@ npx tsx src/cli.ts lsp                          # language server (stdio)
 After `npm link`, all of the above are just `urlang <command>`. New project:
 
 ```sh
-npm create urlang my-app -- --template vite     # or: react | tauri | tauri-react | electron
+npm create urlang my-app -- --template react
 ```
+
+| Template | What you get |
+|---|---|
+| `vite` | Plain web app — HTML/CSS/JS with UrLang logic |
+| `react` | React components written in UrLang (`.urx`) |
+| `svelte` | Svelte components + typed UrLang logic modules |
+| `node` | Node server, entirely UrLang |
+| `express` | Express API, entirely UrLang |
+| `bun` | Bun server — runs `.ur` files **directly**, no build step |
+| `tauri` / `tauri-react` / `tauri-svelte` | Desktop app: Rust backend, typed `invoke` bridge |
+| `electron` | Electron — main process in UrLang too |
 
 ## The language in 60 seconds
 
@@ -101,6 +112,23 @@ Under the hood it emits the **standard automatic JSX runtime** (`_jsx`/`_jsxs` f
 
 For **Svelte or Vue**, the pattern is the one TypeScript users already know: components stay `.svelte`/`.vue`, and your typed logic lives in `.ur` modules they import.
 
+## Servers: Node, Express, Bun
+
+```
+// src/main.ur — an Express API, all UrLang
+lao asal express "express" se;
+lao { banaoUser } "./users.ur" se;
+
+pakka app = express();
+app.post("/users", kaam (req: koi, res: koi) {
+  res.status(201).json(banaoUser(req.body.naam, req.body.umar));
+});
+app.listen(3000);
+```
+
+- **Node / Express**: `urlang build src/main.ur -o dist` emits plain ES modules (+ source maps + `.d.ts`), then `node dist/main.js`. Or skip the build in dev with `urlang run`.
+- **Bun**: `.ur` files run **directly** — `bunfig.toml` preloads `ur-lang/bun`, and Bun compiles and type-checks them on import, exactly as it does TypeScript. A type error stops the import.
+
 ## Use with Vite, Tauri, Electron
 
 ```ts
@@ -141,7 +169,7 @@ src/            compiler: lexer → parser → checker → codegen (+ sourcemaps
 tests/          unit + integration tests; tests/conformance/ = spec conformance suite
 examples/       language tour and runnable samples
 demo/           real Vite app (built + DOM-tested in CI)
-packages/create-urlang/   project scaffolder (vite | react | tauri | tauri-react | electron)
+packages/create-urlang/   project scaffolder (10 templates: web, react, svelte, node, express, bun, tauri, electron)
 editors/vscode-urlang/    VS Code extension (grammar + LSP client)
 playground/     in-browser compile+run
 SPEC.md         language specification   docs/errors.md   diagnostic codes

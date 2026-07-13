@@ -1,0 +1,3 @@
+# Registers the UrLang loader, so Bun can import .ur / .urx files directly —
+# exactly the way it already handles .ts. Applies to `bun run` and `bun build`.
+preload = ["./urlang.preload.js"]

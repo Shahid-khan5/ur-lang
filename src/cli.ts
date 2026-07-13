@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildFile, buildGraph, checkFile } from "./cli-lib.js";
+import { buildGraph, checkFile } from "./cli-lib.js";
 import { formatDiagnostics } from "./compiler.js";
 import type { UrError } from "./errors.js";
 
@@ -153,19 +153,25 @@ async function main(argv: string[]): Promise<number> {
         return await new Promise<number>(() => {}); // run until interrupted
       }
       let failed = false;
+      const built = new Set<string>();
       for (const file of files) {
-        const result = buildFile(file, {
+        // Follow imports: emitting an entry without the modules it imports
+        // would produce a dist/ that cannot run.
+        for (const result of buildGraph(file, {
           outDir,
           sourceMap,
           declarations,
           ...(ambient ? { ambient } : {}),
           ...(resolveTypes ? { resolveTypes } : {}),
-        });
-        if (result.diagnostics.length > 0) {
-          printDiagnostics(file, result.source, result.diagnostics);
-          failed = true;
-        } else {
-          process.stdout.write(`${file} -> ${result.outputPath}\n`);
+        })) {
+          if (built.has(result.inputPath)) continue; // shared by several entries
+          built.add(result.inputPath);
+          if (result.diagnostics.length > 0) {
+            printDiagnostics(result.inputPath, result.source, result.diagnostics);
+            failed = true;
+          } else {
+            process.stdout.write(`${result.inputPath} -> ${result.outputPath}\n`);
+          }
         }
       }
       return failed ? 1 : 0;

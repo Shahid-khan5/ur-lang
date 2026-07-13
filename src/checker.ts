@@ -88,11 +88,19 @@ export interface CheckResult {
   exports: ModuleExports;
 }
 
-/** JS globals UrLang programs may reference without a `bahar` declaration. Typed koi. */
+/**
+ * JS globals UrLang programs may reference without a `bahar` declaration, both
+ * as values and with `naya`. Typed koi. Runtime-specific globals (`Bun`,
+ * `process`, `Deno`) stay out — declare those with `bahar` so the code says
+ * which runtime it assumes.
+ */
 const KNOWN_GLOBALS = new Set([
   "console", "Math", "JSON", "Date", "String", "Number", "Boolean", "Array", "Object",
   "parseInt", "parseFloat", "isNaN", "isFinite", "globalThis", "window", "document",
   "setTimeout", "setInterval", "clearTimeout", "clearInterval", "Promise", "Error", "fetch",
+  "Map", "Set", "WeakMap", "WeakSet", "RegExp", "Symbol", "BigInt",
+  "URL", "URLSearchParams", "Request", "Response", "Headers", "AbortController",
+  "TextEncoder", "TextDecoder", "structuredClone", "queueMicrotask", "crypto",
 ]);
 
 class Scope {
@@ -1305,6 +1313,9 @@ class Checker {
         const binding = this.scope.lookup(expr.className);
         const argTypes = expr.args.map((a) => (a.kind === "Spread" ? this.expr(a.argument) : this.expr(a)));
         if (binding === null) {
+          // Built-in constructors (`naya Date()`, `naya URL(...)`) are koi, like
+          // every other reference to a known global.
+          if (KNOWN_GLOBALS.has(expr.className)) return KOI;
           this.error(`Arre yaar, '${expr.className}' naam ki koi jamaat nahi hai.`, expr.span);
           return KOI;
         }

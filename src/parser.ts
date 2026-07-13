@@ -65,6 +65,18 @@ class Parser {
     return null;
   }
 
+  /**
+   * Consumes a separator comma in a bracketed list, and reports whether another
+   * item follows. A comma sitting right before the list's closing token is a
+   * *trailing* comma: it is consumed, but the list ends — the same rule JS and
+   * TypeScript use, and what any multi-line formatter produces.
+   */
+  private matchListComma(closer: TokenKind): boolean {
+    if (!this.at(TokenKind.Comma)) return false;
+    this.next();
+    return !this.at(closer);
+  }
+
   private expect(kind: TokenKind, what: string): Token {
     const t = this.peek();
     if (t.kind !== kind) {
@@ -138,7 +150,7 @@ class Parser {
           const names: string[] = [];
           do {
             names.push(this.expect(TokenKind.Identifier, "naam").value);
-          } while (this.match(TokenKind.Comma));
+          } while (this.matchListComma(TokenKind.RBrace));
           this.expect(TokenKind.RBrace, "}");
           const source = this.expect(TokenKind.String, "module ka path");
           if (!this.at(TokenKind.Se)) {
@@ -252,7 +264,7 @@ class Parser {
             this.expect(TokenKind.Colon, ":");
             const type = this.typeNode();
             props.push({ key: keyTok.value, type, optional, span: this.span(keyTok) });
-          } while (this.match(TokenKind.Comma));
+          } while (this.matchListComma(TokenKind.RBrace));
         }
         this.expect(TokenKind.RBrace, "}");
         return { kind: "ObjectType", props, span: this.span(t) };
@@ -279,7 +291,7 @@ class Parser {
           this.next();
           do {
             typeArgs.push(this.typeNode());
-          } while (this.match(TokenKind.Comma));
+          } while (this.matchListComma(TokenKind.Gt));
           this.expect(TokenKind.Gt, ">");
         }
         return { kind: "NamedType", name: t.value, typeArgs, span: this.span(t) };
@@ -408,7 +420,7 @@ class Parser {
         if (rest && !this.at(TokenKind.RParen)) {
           this.fail("Arre yaar, rest parameter aakhri hona chahiye.", this.peek());
         }
-      } while (this.match(TokenKind.Comma));
+      } while (this.matchListComma(TokenKind.RParen));
     }
     this.expect(TokenKind.RParen, ")");
     return params;
@@ -422,7 +434,7 @@ class Parser {
       this.next();
       do {
         typeParams.push(this.expect(TokenKind.Identifier, "type parameter").value);
-      } while (this.match(TokenKind.Comma));
+      } while (this.matchListComma(TokenKind.Gt));
       this.expect(TokenKind.Gt, ">");
     }
     const params = this.paramList();
@@ -476,7 +488,7 @@ class Parser {
     const names: string[] = [];
     do {
       names.push(this.expect(TokenKind.Identifier, "naam").value);
-    } while (this.match(TokenKind.Comma));
+    } while (this.matchListComma(closer));
     this.expect(closer, isObject ? "}" : "]");
     if (!this.at(TokenKind.Assign)) {
       this.fail("Arre yaar, destructuring mein '=' ke saath value do.", this.peek());
@@ -532,7 +544,7 @@ class Parser {
         this.next();
         do {
           names.push(this.expect(TokenKind.Identifier, "naam").value);
-        } while (this.match(TokenKind.Comma));
+        } while (this.matchListComma(TokenKind.RBrace));
         this.expect(TokenKind.RBrace, "}");
       } else if (defaultName === null) {
         this.fail('Arre yaar, import aise likhte hain: lao { naam } "./module.ur" se;', this.peek());
@@ -690,7 +702,7 @@ class Parser {
             } else {
               args.push(this.expression());
             }
-          } while (this.match(TokenKind.Comma));
+          } while (this.matchListComma(TokenKind.RParen));
         }
         this.expect(TokenKind.RParen, ")");
         expr = { kind: "Call", callee: expr, args, span: expr.span };
@@ -750,7 +762,7 @@ class Parser {
             } else {
               args.push(this.expression());
             }
-          } while (this.match(TokenKind.Comma));
+          } while (this.matchListComma(TokenKind.RParen));
         }
         this.expect(TokenKind.RParen, ")");
         return { kind: "NewExpr", className: className.value, args, span: this.span(t) };
@@ -763,7 +775,7 @@ class Parser {
           if (!this.at(TokenKind.RParen)) {
             do {
               args.push(this.expression());
-            } while (this.match(TokenKind.Comma));
+            } while (this.matchListComma(TokenKind.RParen));
           }
           this.expect(TokenKind.RParen, ")");
           return { kind: "SuperCall", args, span: this.span(t) };
@@ -805,7 +817,7 @@ class Parser {
             } else {
               elements.push(this.expression());
             }
-          } while (this.match(TokenKind.Comma));
+          } while (this.matchListComma(TokenKind.RBracket));
         }
         this.expect(TokenKind.RBracket, "]");
         return { kind: "ArrayLiteral", elements, span: this.span(t) };
@@ -832,7 +844,7 @@ class Parser {
             this.expect(TokenKind.Colon, ":");
             const value = this.expression();
             properties.push({ kind: "prop", key, value, span: this.span(keyTok) });
-          } while (this.match(TokenKind.Comma));
+          } while (this.matchListComma(TokenKind.RBrace));
         }
         this.expect(TokenKind.RBrace, "}");
         return { kind: "ObjectLiteral", properties, span: this.span(t) };

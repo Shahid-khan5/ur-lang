@@ -90,6 +90,31 @@ describe("cli: end-to-end via tsx", () => {
     expect(stdout).toContain("fib(15) = 610");
   }, 30000);
 
+  it("urlang build follows imports, so the emitted entry actually runs", () => {
+    // A build that emits main.js without the greet.js it imports is a broken
+    // build — `node dist/main.js` would die on a missing module.
+    const buildDir = fs.mkdtempSync(path.join(os.tmpdir(), "urlang-build-"));
+    fs.writeFileSync(
+      path.join(buildDir, "greet.ur"),
+      'bhejo kaam salaam(naam: lafz): lafz { wapas "salam " + naam; }'
+    );
+    const entry = path.join(buildDir, "main.ur");
+    fs.writeFileSync(entry, 'lao { salaam } "./greet.ur" se;\nbolo salaam("duniya");');
+    const out = path.join(buildDir, "dist");
+
+    execFileSync(process.execPath, ["node_modules/tsx/dist/cli.mjs", "src/cli.ts", "build", entry, "-o", out], {
+      encoding: "utf8",
+      cwd: path.resolve(import.meta.dirname, ".."),
+    });
+
+    expect(fs.existsSync(path.join(out, "main.js"))).toBe(true);
+    expect(fs.existsSync(path.join(out, "greet.js"))).toBe(true);
+    fs.writeFileSync(path.join(out, "package.json"), '{"type":"module"}');
+    const stdout = execFileSync(process.execPath, [path.join(out, "main.js")], { encoding: "utf8" });
+    expect(stdout.trim()).toBe("salam duniya");
+    fs.rmSync(buildDir, { recursive: true, force: true });
+  }, 30000);
+
   it("urlang check reports type errors with carets and exits nonzero", () => {
     const input = writeUr("bad-check.ur", "rakho x: adad = sach;");
     let failed = false;
