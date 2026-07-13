@@ -27,8 +27,8 @@ statement      = varDecl | destructureDecl | printStmt | ifStmt | whileStmt
 varDecl        = ("rakho" | "pakka") IDENT [":" type] "=" expr ";" ;
 destructureDecl= ("rakho" | "pakka") ("{" identList "}" | "[" identList "]") "=" expr ";" ;
 printStmt      = "bolo" expr { "," expr } ";" ;
-ifStmt         = "agar" expr block { "warna" "agar" expr block } ["warna" block] ;
-whileStmt      = "jab" "tak" expr block ;                          (* parens optional *)
+ifStmt         = "agar" "(" expr ")" block { "warna" "agar" "(" expr ")" block } ["warna" block] ;
+whileStmt      = "jab" "tak" "(" expr ")" block ;
 forEachStmt    = "har" IDENT expr "mein" block ;
 forRangeStmt   = "har" IDENT expr "se" expr "tak" block ;          (* inclusive *)
 breakStmt      = "bas" ";" ;

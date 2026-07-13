@@ -180,10 +180,12 @@ export class Parser extends ExpressionParser {
 
   protected ifStmt(): IfStmt {
     const kw = this.expect(TokenKind.Agar, "agar");
-    // Parentheses around the condition are optional: the block's braces are
-    // mandatory, so there is nothing for them to disambiguate (and `har … mein`
-    // never had them). `agar (x)` still parses — those are just grouping parens.
+    // Parenthesized, as in JS/TS/C#/Java. They are not needed to disambiguate
+    // anything (the braces are mandatory), but familiarity wins — and one
+    // spelling beats two.
+    this.expect(TokenKind.LParen, "(");
     const condition = this.expression();
+    this.expect(TokenKind.RParen, ")");
     const consequent = this.block();
     let alternate: IfStmt | BlockStmt | null = null;
     if (this.match(TokenKind.Warna)) {
@@ -198,7 +200,9 @@ export class Parser extends ExpressionParser {
       this.fail("Arre yaar, 'jab' ke baad 'tak' aana chahiye — loop 'jab tak' se banta hai.", this.peek());
     }
     this.next();
-    const condition = this.expression(); // parens optional, as in `agar`
+    this.expect(TokenKind.LParen, "(");
+    const condition = this.expression();
+    this.expect(TokenKind.RParen, ")");
     const body = this.block();
     return { kind: "WhileStmt", condition, body, span: this.span(kw) };
   }

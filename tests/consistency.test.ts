@@ -13,37 +13,37 @@ function errs(src: string): string[] {
   return compile(src).diagnostics.map((d) => d.message);
 }
 
-describe("optional condition parentheses", () => {
-  it("agar / warna agar work without parens, like har", () => {
+describe("condition parentheses", () => {
+  // Parens are required, as in JS/TS/C#/Java — familiarity beats saving two
+  // characters, and there is then exactly one way to write a condition.
+  it("agar / warna agar / jab tak take a parenthesized condition", () => {
     const code = ok(`
       rakho n = 7;
-      agar n > 5 {
+      agar (n > 5) {
         bolo "bara";
-      } warna agar n == 5 {
+      } warna agar (n == 5) {
         bolo "barabar";
       } warna {
         bolo "chota";
       }
+      jab tak (n > 0) { n -= 1; }
     `);
     expect(code).toContain("if (n > 5)");
     expect(code).toContain("else if (n === 5)");
+    expect(code).toContain("while (n > 0)");
   });
 
-  it("jab tak works without parens", () => {
-    const code = ok("rakho i = 0;\njab tak i < 3 { i += 1; }");
-    expect(code).toContain("while (i < 3)");
+  it("rejects a bare condition with a helpful message", () => {
+    expect(errs("rakho n = 7;\nagar n > 5 { bolo 1; }")[0]).toContain("(");
+    expect(errs("rakho n = 7;\njab tak n > 5 { bolo 1; }")[0]).toContain("(");
   });
 
-  it("parens still work (nothing breaks)", () => {
-    ok("rakho i = 0;\nagar (i == 0) { bolo 1; }\njab tak (i < 2) { i += 1; }");
-  });
-
-  it("a parenthesized condition is not mistaken for a call", () => {
-    ok("kaam f(): bool { wapas sach; }\nagar (f()) { bolo 1; }\nagar f() { bolo 2; }");
+  it("a call in the condition still works", () => {
+    ok("kaam f(): bool { wapas sach; }\nagar (f()) { bolo 1; }");
   });
 
   it("conditions must still be bool", () => {
-    expect(errs("agar 5 { bolo 1; }").length).toBeGreaterThan(0);
+    expect(errs("agar (5) { bolo 1; }").length).toBeGreaterThan(0);
   });
 });
 

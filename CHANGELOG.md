@@ -17,6 +17,13 @@ Covered by semver: everything in `SPEC.md`, `docs/errors.md` codes, CLI commands
 A consistency pass over the language surface: places where a construct behaved
 differently from its siblings for no defensible reason.
 
+**Not changed, deliberately:** conditions keep their parentheses
+(`agar (x > 5) { … }`). They disambiguate nothing — the braces are mandatory —
+but every language an UrLang user already knows (JS, TS, C#, Java) writes them,
+and familiarity is worth more here than saving two characters. `bolo x;` and
+`wapas x;` stay paren-less for the same reason: they are statement keywords, and
+JS spells `return x` / `throw x` exactly that way.
+
 ### Added
 
 - **A typed standard library.** `xs.map(…)`, `s.split(…)`, `xs.find(…)` and the
@@ -29,10 +36,6 @@ differently from its siblings for no defensible reason.
   - Unannotated lambdas **infer their return type** from the body.
   - Callbacks may take fewer parameters than declared (`xs.map(kaam (n) …)`
     satisfies a `(T, adad) => U` slot), as in JS.
-- **Parentheses around conditions are optional**: `agar x > 5 { … }` and
-  `jab tak x > 0 { … }`. Braces are mandatory, so the parens never disambiguated
-  anything — and `har … mein` never required them. The parenthesized form still
-  parses (they are ordinary grouping parens).
 - **Object shorthand**: `{ naam, umar }` means `{ naam: naam, umar: umar }`.
 - **`bahar` takes a type**: `bahar Bun: { serve: kaam(koi): koi };`. Ambient
   declarations were the one thing in the language that could not be typed.

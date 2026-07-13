@@ -3,6 +3,7 @@
 // process, and hit over real HTTP. No mocks anywhere in the chain.
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as path from "node:path";
 import { execFileSync, spawn, ChildProcess } from "node:child_process";
 
@@ -26,6 +27,24 @@ afterAll(() => {
 function scaffold(name: string, template: string): string {
   execFileSync(process.execPath, [bin, name, "--template", template], { cwd: root, encoding: "utf8" });
   return path.join(root, name);
+}
+
+/** An OS-assigned free port — the templates ship 3000, which anything could hold. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as net.AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+/** Points a scaffolded app at `port` instead of the template's default 3000. */
+function usePort(app: string, port: number): void {
+  const main = path.join(app, "src", "main.ur");
+  fs.writeFileSync(main, fs.readFileSync(main, "utf8").replace("= 3000;", `= ${port};`));
 }
 
 /** Waits for the server to answer, then returns the parsed JSON body. */
@@ -59,18 +78,24 @@ async function withServer<T>(
   }
 }
 
+/** Runs the real `urlang build` the template's package.json would run. */
+function build(app: string): void {
+  execFileSync(process.execPath, [
+    path.join(projectRoot, "node_modules", "tsx", "dist", "cli.mjs"),
+    path.join(projectRoot, "src", "cli.ts"),
+    "build",
+    "src/main.ur",
+    "-o",
+    "dist",
+  ], { cwd: app, encoding: "utf8" });
+}
+
 describe("node template", () => {
   it("builds with the CLI and serves typed JSON", async () => {
     const app = scaffold("node-app", "node");
-    // The exact command `npm run build` runs, via the real CLI.
-    execFileSync(process.execPath, [
-      path.join(projectRoot, "node_modules", "tsx", "dist", "cli.mjs"),
-      path.join(projectRoot, "src", "cli.ts"),
-      "build",
-      "src/main.ur",
-      "-o",
-      "dist",
-    ], { cwd: app, encoding: "utf8" });
+    const port = await freePort();
+    usePort(app, port);
+    build(app);
 
     expect(fs.existsSync(path.join(app, "dist", "main.js"))).toBe(true);
     expect(fs.existsSync(path.join(app, "dist", "greet.js"))).toBe(true);
@@ -78,8 +103,8 @@ describe("node template", () => {
 
     const proc = spawn(process.execPath, ["dist/main.js"], { cwd: app, stdio: "pipe" });
     await withServer(proc, async () => {
-      expect(await getJson("http://localhost:3000/")).toEqual({ paigham: "salam, duniya!" });
-      const sehat = (await getJson("http://localhost:3000/sehat")) as { theek: boolean; waqt: string };
+      expect(await getJson(`http://localhost:${port}/`)).toEqual({ paigham: "salam, duniya!" });
+      const sehat = (await getJson(`http://localhost:${port}/sehat`)) as { theek: boolean; waqt: string };
       expect(sehat.theek).toBe(true);
       expect(typeof sehat.waqt).toBe("string");
     });
@@ -89,19 +114,14 @@ describe("node template", () => {
 describe("express template", () => {
   it("serves GET and POST through UrLang route handlers", async () => {
     const app = scaffold("express-app", "express");
-    execFileSync(process.execPath, [
-      path.join(projectRoot, "node_modules", "tsx", "dist", "cli.mjs"),
-      path.join(projectRoot, "src", "cli.ts"),
-      "build",
-      "src/main.ur",
-      "-o",
-      "dist",
-    ], { cwd: app, encoding: "utf8" });
+    const port = await freePort();
+    usePort(app, port);
+    build(app);
 
     const proc = spawn(process.execPath, ["dist/main.js"], { cwd: app, stdio: "pipe" });
     await withServer(proc, async () => {
-      expect(await getJson("http://localhost:3000/")).toEqual({ paigham: "salam, duniya!" });
-      const res = await fetch("http://localhost:3000/users", {
+      expect(await getJson(`http://localhost:${port}/`)).toEqual({ paigham: "salam, duniya!" });
+      const res = await fetch(`http://localhost:${port}/users`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ naam: "Ali", umar: 30 }),
@@ -116,6 +136,8 @@ describe("express template", () => {
 describe("bun template", () => {
   it.skipIf(!hasBun)("runs .ur files directly through the Bun loader plugin", async () => {
     const app = scaffold("bun-app", "bun");
+    const port = await freePort();
+    usePort(app, port);
     // The template preloads the published "ur-lang/bun"; point it at the source.
     const pluginPath = path.join(projectRoot, "src", "bun-plugin.ts").replace(/\\/g, "/");
     fs.writeFileSync(
@@ -130,8 +152,8 @@ describe("bun template", () => {
     // No build step: bun executes src/main.ur itself.
     const proc = spawn(bunBin, ["run", "src/main.ur"], { cwd: app, stdio: "pipe" });
     await withServer(proc, async () => {
-      expect(await getJson("http://localhost:3000/")).toEqual({ paigham: "salam, duniya!" });
-      const sehat = (await getJson("http://localhost:3000/sehat")) as { theek: boolean };
+      expect(await getJson(`http://localhost:${port}/`)).toEqual({ paigham: "salam, duniya!" });
+      const sehat = (await getJson(`http://localhost:${port}/sehat`)) as { theek: boolean };
       expect(sehat.theek).toBe(true);
     });
   }, 120000);

@@ -58,8 +58,8 @@ npm create urlang my-app -- --template react
 | Types | `adad lafz bool koi khaali kuchnahi`, `T[]`, `A \| B`, `{ k?: T }`, `"literal"`, `Wada<T>` | `number string boolean any null/undefined void`, arrays, unions, objects, literals, `Promise<T>` |
 | Aliases | `qisim Shakhs = { naam: lafz };` | `type Shakhs = { naam: string };` |
 | Print | `bolo a, b;` | `console.log(a, b)` |
-| Branches | `agar x > 5 { }` / `warna agar` / `warna`, ternary `? :` (condition parens optional) | `if / else if / else` |
-| Loops | `jab tak x > 0 { }`, `har x list mein`, `har i 1 se 10 tak`, `bas`, `agla` | `while`, `for…of`, `for`, `break`, `continue` |
+| Branches | `agar (…) / warna agar / warna`, ternary `? :` | `if / else if / else` |
+| Loops | `jab tak (…)`, `har x list mein`, `har i 1 se 10 tak`, `bas`, `agla` | `while`, `for…of`, `for`, `break`, `continue` |
 | Nullish | `naam ?? "mehmaan"`, `x?.y` | `??`, `?.` |
 | Functions | `kaam f<T>(x: T[], y?: adad, z: adad = 1, ...r: adad[]): T` | generics, optional/default/rest params |
 | Lambdas | `kaam (n: adad): adad { wapas n * 2; }` | arrow functions (lexical `yeh`) |
