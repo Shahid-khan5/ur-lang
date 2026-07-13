@@ -33,9 +33,12 @@ export default function urlang(options: UrlangPluginOptions = {}): Plugin {
       }
     },
     transform(code, id) {
-      if (!id.endsWith(".ur") && !id.endsWith(".urx")) return null;
+      // Vite hands ids with a query attached (`?t=…` on hot updates, `?import`,
+      // …); the extension test has to run against the bare path.
+      const filePath = id.split("?", 1)[0]!;
+      if (!filePath.endsWith(".ur") && !filePath.endsWith(".urx")) return null;
       const result = compile(code, {
-        fileName: id,
+        fileName: filePath,
         sourceMap: true,
         loadModule: fsModuleLoader,
         ...(ambient.length > 0 ? { ambient } : {}),

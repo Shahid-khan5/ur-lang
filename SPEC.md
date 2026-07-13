@@ -146,10 +146,10 @@ Within `agar`/ternary branches, a variable's type narrows when the condition is:
 
 ### 3.8 JSX (`.urx`)
 
-A JSX expression has type `koi`. Tag names starting with a lowercase letter, or containing `-`, are **intrinsic**: any attribute name is accepted, but every attribute *expression* is type-checked. Any other tag name is a **component**, resolved as a value (dotted names via member access) and checked as follows:
+A JSX expression has type `koi`. A **plain** tag name starting with a lowercase letter, or containing `-`, is **intrinsic**: any attribute name is accepted, but every attribute *expression* is type-checked. Every other tag name — including any **dotted** name, whatever its case — is a **component**, resolved as a value (dotted names via member access) and checked as follows:
 
 - The component's **first parameter** is its props type. If it is an object type, attributes are checked against it: an unknown attribute is an error (UR2045), a missing required property is an error (UR2046), and each attribute's value must be assignable to the declared property type (UR2042, with contextual typing).
-- A bare attribute (`<Comp on/>`) has type `sach`. A `key` attribute is reserved by the runtime and never checked against props.
+- A bare attribute (`<Comp on/>`) has type `sach`. A `key` attribute is reserved by the runtime: its expression is type-checked, but it is never reported as an unknown prop, never checked against a props type, and satisfies a declared `key` prop.
 - Element children satisfy a required `children` prop.
 - A `{...spread}` attribute makes the attribute set open-ended: unknown/missing checks are suppressed, while the types of explicitly named attributes are still checked.
 - If the props parameter is not an object type (e.g. `koi`), attributes are only checked as expressions.
@@ -158,7 +158,7 @@ A JSX expression has type `koi`. Tag names starting with a lowercase letter, or 
 
 UrLang compiles to JavaScript with no runtime library. Notable mappings: `bolo`→`console.log`, `==`→`===` (khaali→loose), `har x e mein` → `for...of` (`Object.keys(e)` for typed objects), `har i a se b tak` → inclusive `for` loop, function expressions → arrow functions (lexical `yeh`), `qisim`/type annotations erase. Programs with type errors do not emit code.
 
-JSX compiles to the **standard automatic runtime**: `<t a={x}>{y}</t>` → `_jsx(t, { a: x, children: y })` (`_jsxs` when there are 2+ children, with `children` as an array), a `key` attribute becomes the third argument, and `<>…</>` uses `_Fragment`. `_jsx`/`_jsxs`/`_Fragment` are imported from `<jsxImportSource>/jsx-runtime` (default `react`). Intrinsic tags emit as string literals, components as value references. JSX text is whitespace-cleaned as Babel does: leading/trailing indentation around newlines is removed, and lines are joined with a single space.
+JSX compiles to the **standard automatic runtime**: `<t a={x}>{y}</t>` → `_jsx(t, { a: x, children: y })` (`_jsxs` when there are 2+ children, with `children` as an array), a `key` attribute becomes the third argument, and `<>…</>` uses `_Fragment`. `_jsx`/`_jsxs`/`_Fragment` are imported from `<jsxImportSource>/jsx-runtime` (default `react`). Intrinsic tags emit as string literals, components as value references. Element children take precedence over a `children` attribute. JSX text is whitespace-cleaned as Babel does (leading/trailing indentation around newlines removed, lines joined with a single space), and HTML entities in text and attribute strings are decoded (`&nbsp;` → U+00A0; unknown entities are left verbatim). Unlike ordinary UrLang strings, JSX attribute strings take no backslash escapes.
 
 ## 5. Stability
 

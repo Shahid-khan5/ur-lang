@@ -1,5 +1,6 @@
-import type { Expr, JsxChild, JsxElement, JsxFragment, Program, Span, Stmt } from "./ast.js";
+import type { Expr, JsxElement, JsxFragment, Program, Span, Stmt } from "./ast.js";
 import { SourceMapBuilder } from "./sourcemap.js";
+import { cleanJsxText, isIntrinsicTag } from "./jsx.js";
 
 export interface CodegenOptions {
   /** Rewrite `./x.ur` import specifiers to `./x.js` (used by the CLI's file builds). */
@@ -7,22 +8,6 @@ export interface CodegenOptions {
   sourceMap?: SourceMapBuilder | null;
   /** Package whose `<source>/jsx-runtime` provides jsx/jsxs/Fragment. Default: "react". */
   jsxImportSource?: string;
-}
-
-/**
- * Cleans JSX text the way Babel does: indentation-only whitespace around
- * newlines disappears, interior single-line spacing is kept.
- */
-export function cleanJsxText(raw: string): string {
-  const lines = raw.split("\n");
-  const kept: string[] = [];
-  for (let idx = 0; idx < lines.length; idx++) {
-    let line = lines[idx]!;
-    if (idx !== 0) line = line.replace(/^[ \t\r]+/, "");
-    if (idx !== lines.length - 1) line = line.replace(/[ \t\r]+$/, "");
-    if (line !== "") kept.push(line);
-  }
-  return kept.join(" ");
 }
 
 // Operator precedence, used to insert parentheses only where needed.
@@ -598,11 +583,6 @@ class Codegen {
 
   // ---------- JSX ----------
 
-  /** Intrinsic tags (lowercase or dashed) become strings; components are references. */
-  private jsxTag(tagName: string): string {
-    return /^[a-z]/.test(tagName) || tagName.includes("-") ? JSON.stringify(tagName) : tagName;
-  }
-
   /**
    * Emits the standard automatic-runtime call: `_jsx(tag, props)` /
    * `_jsxs(tag, { ...props, children: [...] })`, with `key` as the third
@@ -610,6 +590,19 @@ class Codegen {
    */
   private jsx(e: JsxElement | JsxFragment): void {
     this.mark(e.span);
+
+    const children: (() => void)[] = [];
+    for (const child of e.children) {
+      if (child.kind === "JsxText") {
+        const text = cleanJsxText(child.value);
+        if (text !== "") children.push(() => this.write(JSON.stringify(text)));
+      } else if (child.kind === "JsxExprContainer") {
+        children.push(() => this.expr(child.expr, 0));
+      } else {
+        children.push(() => this.jsx(child));
+      }
+    }
+
     const attrs = e.kind === "JsxElement" ? e.attributes : [];
     let keyValue: Expr | null = null;
     const props: (() => void)[] = [];
@@ -625,6 +618,9 @@ class Codegen {
         keyValue = attr.value;
         continue;
       }
+      // Element children win over a `children` attribute (as in JSX), so don't
+      // emit both and leave a duplicate key in the props object.
+      if (attr.name === "children" && children.length > 0) continue;
       props.push(() => {
         this.write(/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(attr.name) ? attr.name : JSON.stringify(attr.name));
         this.write(": ");
@@ -633,17 +629,6 @@ class Codegen {
       });
     }
 
-    const children: (() => void)[] = [];
-    for (const child of e.children) {
-      if (child.kind === "JsxText") {
-        const text = cleanJsxText(child.value);
-        if (text !== "") children.push(() => this.write(JSON.stringify(text)));
-      } else if (child.kind === "JsxExprContainer") {
-        children.push(() => this.expr(child.expr, 0));
-      } else {
-        children.push(() => this.jsx(child));
-      }
-    }
     if (children.length === 1) {
       props.push(() => {
         this.write("children: ");
@@ -665,7 +650,13 @@ class Codegen {
     else this.usedJsx = true;
     if (e.kind === "JsxFragment") this.usedFragment = true;
 
-    this.write(`${fn}(${e.kind === "JsxElement" ? this.jsxTag(e.tagName) : "_Fragment"}, `);
+    const tag =
+      e.kind === "JsxFragment"
+        ? "_Fragment"
+        : isIntrinsicTag(e.tagName)
+          ? JSON.stringify(e.tagName)
+          : e.tagName; // component: an identifier or a dotted member expression
+    this.write(`${fn}(${tag}, `);
     if (props.length === 0) {
       this.write("{}");
     } else {

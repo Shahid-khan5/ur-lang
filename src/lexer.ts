@@ -1,5 +1,6 @@
 import { KEYWORDS, Token, TokenKind } from "./tokens.js";
 import { UrSyntaxError } from "./errors.js";
+import { decodeJsxEntities } from "./jsx.js";
 
 const enum Ch {
   Newline = 10,
@@ -222,7 +223,8 @@ export function tokenize(source: string, comments?: Comment[], options?: LexOpti
       return;
     }
     if (c === Ch.Quote || c === Ch.Apostrophe) {
-      // JSX attribute strings are raw: no escape processing, newlines allowed.
+      // JSX attribute strings take no backslash escapes (a `\` is a literal
+      // backslash) but do take HTML entities — same as JSX everywhere.
       i++;
       const valueStart = i;
       while (i < len && source.charCodeAt(i) !== c) {
@@ -230,7 +232,7 @@ export function tokenize(source: string, comments?: Comment[], options?: LexOpti
         i++;
       }
       if (i >= len) fail("Arre yaar, JSX attribute ki string band nahi hui.", start);
-      push(TokenKind.String, source.slice(valueStart, i), start);
+      push(TokenKind.String, decodeJsxEntities(source.slice(valueStart, i)), start);
       i++;
       return;
     }
@@ -258,7 +260,7 @@ export function tokenize(source: string, comments?: Comment[], options?: LexOpti
       // Token position points at the text start, not where scanning stopped.
       tokens.push({
         kind: TokenKind.JsxText,
-        value: source.slice(start, i),
+        value: decodeJsxEntities(source.slice(start, i)),
         line: startLine,
         col: start - startLineStart + 1,
         pos: start,

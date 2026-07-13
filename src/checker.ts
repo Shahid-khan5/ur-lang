@@ -12,6 +12,7 @@ import type {
   Stmt,
   TypeNode,
 } from "./ast.js";
+import { isIntrinsicTag, RESERVED_JSX_ATTRS } from "./jsx.js";
 import { UrTypeError } from "./errors.js";
 import {
   ADAD,
@@ -677,6 +678,10 @@ class Checker {
           const aliasType = resolved.types.get(name);
           if (aliasType !== undefined) {
             this.exports.types.set(name, aliasType);
+            continue;
+          }
+          if (resolved.partial === true) {
+            this.exports.values.set(name, KOI); // see ModuleExports.partial
             continue;
           }
           this.error(`Arre yaar, '${stmt.source}' mein '${name}' naam ka koi export nahi hai.`, stmt.span);
@@ -1416,7 +1421,7 @@ class Checker {
    */
   private jsxElement(expr: JsxElement): Type {
     for (const child of expr.children) this.jsxChild(child);
-    const intrinsic = /^[a-z]/.test(expr.tagName) || expr.tagName.includes("-");
+    const intrinsic = isIntrinsicTag(expr.tagName);
 
     let hasSpread = false;
     for (const attr of expr.attributes) {
@@ -1448,6 +1453,12 @@ class Checker {
     for (const attr of expr.attributes) {
       if (attr.kind !== "JsxAttribute") continue;
       provided.add(attr.name);
+      if (RESERVED_JSX_ATTRS.has(attr.name)) {
+        // `key` belongs to the runtime, not to props: it is neither an unknown
+        // prop nor type-checked against one. Its expression is still checked.
+        if (attr.value !== null) this.expr(attr.value);
+        continue;
+      }
       const expected = expectedProps?.get(attr.name);
       const valueType =
         attr.value === null

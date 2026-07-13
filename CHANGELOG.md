@@ -16,12 +16,18 @@ Covered by semver: everything in `SPEC.md`, `docs/errors.md` codes, CLI commands
 
 ### Added — JSX (`.urx` files)
 
-- **JSX syntax**, exactly as in TSX: elements, attributes (`a="s"`, `a={expr}`, bare `a`), `{...spread}`, `{expr}` children, fragments `<>…</>`, self-closing tags, dotted (`<Foo.Bar/>`) and dashed (`data-id`) names. Enabled **only** in `.urx` files, so `a < b` keeps meaning less-than everywhere else.
+- **JSX syntax**, exactly as in TSX: elements, attributes (`a="s"`, `a={expr}`, bare `a`), `{...spread}`, `{expr}` children, fragments `<>…</>`, self-closing tags, dotted (`<Foo.Bar/>`) and dashed (`data-id`) names, and HTML entities (`&nbsp;` → U+00A0) in text and attribute strings. `key` is reserved by the runtime, never a prop. Enabled **only** in `.urx` files, so `a < b` keeps meaning less-than everywhere else.
 - **Typed components, TS-style.** A capitalized tag resolves to a `kaam`, and its attributes are checked against the component's first parameter: missing required props (`UR2046`), unknown props (`UR2045`), and mistyped props (`UR2042`) are compile errors. JSX children satisfy a `children` prop. A `{...spread}` attribute relaxes the missing/unknown checks (the value types are still checked). Intrinsic tags (`<div>`) accept any attribute name, but every attribute *expression* is type-checked.
 - **Framework-independent codegen** targeting the standard automatic runtime: `_jsx`/`_jsxs`/`_Fragment` imported from `<source>/jsx-runtime`, with `key` passed as the third argument — byte-for-byte the protocol TSX emits. `jsxImportSource` (compiler + Vite plugin option, default `"react"`) points it at React, Preact, or any runtime speaking that protocol. No Babel, no custom runtime.
 - Toolchain support for `.urx` across the board: CLI (`run`/`build`/`check`/`fmt`), Vite plugin, watch mode, LSP, `.d.ts` emission, and cross-module type checking between `.ur` and `.urx`.
 - **New templates**: `npm create urlang my-app -- --template react` and `--template tauri-react`.
 - New diagnostics: `UR1029`–`UR1032` (JSX syntax), `UR2044`–`UR2046` (JSX types).
+
+### Fixed
+
+- A module surface read from a package's `.d.ts` is now marked **partial**: our TypeScript reader understands a subset of the language, so a name it can't see (React's `useState`, behind `export =` plus a namespace) degrades to `koi` instead of being reported as *"no such export"* — a false error on a real export. Names it *does* read stay strictly typed. Applies to both `lao` and re-exports.
+- `urlang fmt` no longer collapses a whole component onto one line: structurally nested JSX breaks across lines, while elements containing text stay inline (breaking those would swallow whitespace between children and change what renders).
+- The Vite plugin now strips the query from module ids (`?t=…` on hot updates, `?import`), so `.ur`/`.urx` files still compile in dev instead of being skipped.
 
 ### Notes
 

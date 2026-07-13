@@ -3,7 +3,7 @@
 // strings), preserving comments and single blank lines between statements.
 import { tokenize, Comment } from "./lexer.js";
 import { parse } from "./parser.js";
-import { cleanJsxText } from "./codegen.js";
+import { cleanJsxText } from "./jsx.js";
 import type { BlockStmt, Expr, JsxChild, JsxElement, JsxFragment, Param, Stmt, TypeNode } from "./ast.js";
 
 const PRECEDENCE: Record<string, number> = {
@@ -36,8 +36,16 @@ class Formatter {
 
   // ---------- line plumbing ----------
 
+  /** Multi-line text (JSX) arrives with relative indentation; indent each line. */
   private emit(text: string): void {
-    this.lines.push(text === "" ? "" : "  ".repeat(this.indentLevel) + text);
+    if (text === "") {
+      this.lines.push("");
+      return;
+    }
+    const pad = "  ".repeat(this.indentLevel);
+    for (const line of text.split("\n")) {
+      this.lines.push(line === "" ? "" : pad + line);
+    }
   }
 
   private blankBetween(stmtLine: number): void {
@@ -372,10 +380,40 @@ class Formatter {
     }
   }
 
-  /** Compact inline JSX; multi-line indentation text collapses (same output after codegen). */
+  /**
+   * Renders JSX. Children go on their own lines when the element is purely
+   * structural — every child an element or container, no text. With text
+   * present the element stays on one line, because breaking `{a} <b>x</b>`
+   * across lines would swallow the space between the children (JSX drops
+   * whitespace that spans a newline), silently changing what renders.
+   */
   private jsx(e: JsxElement | JsxFragment): string {
-    const children = e.children.map((c) => this.jsxChild(c)).filter((s) => s !== "").join("");
-    if (e.kind === "JsxFragment") return `<>${children}</>`;
+    const rendered = e.children
+      .map((c) => ({ child: c, text: this.jsxChild(c) }))
+      .filter((r) => r.text !== "");
+    const open = e.kind === "JsxFragment" ? "<>" : `<${this.jsxHead(e)}>`;
+    const close = e.kind === "JsxFragment" ? "</>" : `</${e.tagName}>`;
+
+    if (rendered.length === 0) {
+      if (e.kind === "JsxElement" && e.selfClosing) return `<${this.jsxHead(e)}/>`;
+      return open + close;
+    }
+    // Break only for real nesting: several children, or a nested element. A
+    // lone `{expr}` child (`<p>{jawab}</p>`) reads better on one line.
+    const structural = rendered.every((r) => r.child.kind !== "JsxText");
+    const nested =
+      rendered.length > 1 || rendered.some((r) => r.child.kind === "JsxElement" || r.child.kind === "JsxFragment");
+    if (!structural || !nested) {
+      return open + rendered.map((r) => r.text).join("") + close;
+    }
+    const body = rendered
+      .map((r) => r.text.split("\n").map((line) => "  " + line).join("\n"))
+      .join("\n");
+    return `${open}\n${body}\n${close}`;
+  }
+
+  /** Tag name plus attributes, e.g. `div className="app"`. */
+  private jsxHead(e: JsxElement): string {
     const attrs = e.attributes.map((a) =>
       a.kind === "JsxSpreadAttribute"
         ? `{...${this.expr(a.argument, 0)}}`
@@ -385,9 +423,7 @@ class Formatter {
             ? `${a.name}=${JSON.stringify(a.value.value)}`
             : `${a.name}={${this.expr(a.value, 0)}}`
     );
-    const head = [e.tagName, ...attrs].join(" ");
-    if (e.selfClosing && e.children.length === 0) return `<${head}/>`;
-    return `<${head}>${children}</${e.tagName}>`;
+    return [e.tagName, ...attrs].join(" ");
   }
 
   private jsxChild(c: JsxChild): string {

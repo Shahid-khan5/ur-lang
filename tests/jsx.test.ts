@@ -248,6 +248,20 @@ describe("jsx codegen", () => {
     const result = compileJsx("bhejo kaam f(): adad { wapas 1; }");
     expect(result.code).not.toContain("jsx-runtime");
   });
+
+  it("decodes HTML entities in text and attribute strings, like JSX does", () => {
+    const result = compileJsx('bhejo kaam App() { wapas <p title="a&amp;b">ek&nbsp;do &lt;3 &#33;</p>; }');
+    expect(result.diagnostics).toEqual([]);
+    expect(result.code).toContain('title: "a&b"');
+    // &nbsp; becomes a real U+00A0, not the six literal characters.
+    expect(result.code).toContain('children: "ek\u00a0do <3 !"');
+  });
+
+  it("element children win over a children attribute without emitting a duplicate key", () => {
+    const result = compileJsx('bhejo kaam App(x: koi) { wapas <div children={x}>asli</div>; }');
+    expect(result.code).toContain('_jsx("div", { children: "asli" })');
+    expect(result.code!.match(/children:/g)).toHaveLength(1);
+  });
 });
 
 describe("jsx checker", () => {
@@ -313,6 +327,44 @@ describe("jsx checker", () => {
     `;
     expect(compileJsx(src).diagnostics).toEqual([]);
   });
+
+  it("key is reserved by the runtime, not a component prop", () => {
+    // The list pattern: <Comp key={...}/> must not be an unknown-prop error.
+    const src = `
+      kaam Item(props: { naam: lafz }) { wapas <li>{props.naam}</li>; }
+      bhejo kaam App(naam: lafz) { wapas <Item key={naam} naam={naam}/>; }
+    `;
+    const result = compileJsx(src);
+    expect(result.diagnostics.map((d) => d.message)).toEqual([]);
+    expect(result.code).toContain("_jsx(Item, { naam: naam }, naam)");
+  });
+
+  it("still type-checks the key expression itself", () => {
+    const src = `
+      kaam Item(props: { naam: lafz }) { wapas <li>{props.naam}</li>; }
+      bhejo kaam App() { wapas <Item key={ghaib} naam="a"/>; }
+    `;
+    expect(compileJsx(src).diagnostics.length).toBeGreaterThan(0);
+  });
+
+  it("a key attribute also satisfies a component that declares a key prop", () => {
+    const src = `
+      kaam Item(props: { key: lafz }) { wapas <li/>; }
+      bhejo kaam App() { wapas <Item key="k"/>; }
+    `;
+    expect(compileJsx(src).diagnostics).toEqual([]);
+  });
+
+  it("dotted tag names are components, never intrinsic strings", () => {
+    const src = `
+      bahar ui;
+      bhejo kaam App() { wapas <ui.Button label="ok"/>; }
+    `;
+    const result = compileJsx(src);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.code).toContain('_jsx(ui.Button, { label: "ok" })');
+    expect(result.code).not.toContain('"ui.Button"');
+  });
 });
 
 describe("jsx toolchain", () => {
@@ -340,6 +392,36 @@ describe("jsx toolchain", () => {
     expect(format(once, { jsx: true })).toBe(once);
   });
 
+  it("keeps structural jsx on multiple lines instead of collapsing it", async () => {
+    const { format } = await import("../src/formatter.js");
+    const src = [
+      "kaam App(props: { naam: lafz }) {",
+      "  wapas (",
+      '    <div className="app">',
+      "      <h1>Salaam, {props.naam}!</h1>",
+      "      <Ginti shuru={0}/>",
+      "    </div>",
+      "  );",
+      "}",
+      "",
+    ].join("\n");
+    const once = format(src, { jsx: true });
+    // Element-only children each get their own line; text-bearing tags stay inline.
+    expect(once).toContain('  wapas <div className="app">\n');
+    expect(once).toContain("    <h1>Salaam, {props.naam}!</h1>\n");
+    expect(once).toContain("    <Ginti shuru={0}/>\n");
+    expect(once).toContain("  </div>;\n");
+    expect(format(once, { jsx: true })).toBe(once);
+  });
+
+  it("formatting never drops significant whitespace between inline children", async () => {
+    const { format } = await import("../src/formatter.js");
+    const src = 'kaam App(a: koi) {\n  wapas <p>{a} <b>bold</b> tail</p>;\n}\n';
+    const once = format(src, { jsx: true });
+    expect(once).toContain("<p>{a} <b>bold</b> tail</p>");
+    expect(format(once, { jsx: true })).toBe(once);
+  });
+
   it("vite plugin compiles .urx files", async () => {
     const { default: urlang } = await import("../src/vite-plugin.js");
     const plugin = urlang();
@@ -353,6 +435,22 @@ describe("jsx toolchain", () => {
     expect(out).not.toBeNull();
     expect(out!.code).toContain('_jsx("div", {})');
     expect(out!.code).toContain('from "react/jsx-runtime"');
+  });
+
+  it("vite plugin handles ids carrying a query suffix (HMR, ?import)", async () => {
+    const { default: urlang } = await import("../src/vite-plugin.js");
+    const plugin = urlang();
+    const transform = plugin.transform as unknown as (
+      this: { error: (msg: string) => never },
+      code: string,
+      id: string
+    ) => { code: string } | null;
+    const ctx = { error(msg: string): never { throw new Error(msg); } };
+    // Vite appends ?t=<timestamp> on hot updates; the file must still compile.
+    const out = transform.call(ctx, "bhejo asal kaam App() { wapas <div/>; }", "/app/src/App.urx?t=1712345");
+    expect(out).not.toBeNull();
+    expect(out!.code).toContain('_jsx("div", {})');
+    expect(transform.call(ctx, 'bolo "hi";', "/app/src/main.ur?import")).not.toBeNull();
   });
 
   it("cross-module: .ur imports a component from .urx with real types", async () => {
