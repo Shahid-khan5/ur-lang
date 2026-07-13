@@ -72,6 +72,7 @@ export abstract class CheckerBase {
   protected readonly options: CheckOptions;
   /** Set while checking a jamaat's methods. */
   protected currentClass: {
+    className: string;
     instance: Type;
     parentClass: Extract<Type, { kind: "class" }> | null;
     inBanao: boolean;
@@ -412,6 +413,13 @@ export abstract class CheckerBase {
           this.error(`Arre yaar, '${typeName(objectType)}' mein '${property}' naam ki property nahi hai.`, span);
           return KOI;
         }
+        // A `nijee` member is only reachable from inside its own class.
+        if (prop.privateOwner !== undefined && this.currentClass?.className !== prop.privateOwner) {
+          this.error(
+            `Arre yaar, '${property}' nijee hai — jamaat '${prop.privateOwner}' ke bahar nahi chalta.`,
+            span
+          );
+        }
         // Optional properties may be absent — they read as T | khaali.
         return prop.optional ? union([prop.type, KHAALI]) : prop.type;
       }
@@ -431,10 +439,27 @@ export abstract class CheckerBase {
       }
       case "wada":
         return KOI; // .then etc. — intezar is the typed path
+      case "class": {
+        // Reaching *through the class itself* sees the sakit (static) members.
+        const stat = objectType.statics.get(property);
+        if (stat === undefined) {
+          this.error(
+            `Arre yaar, jamaat '${objectType.name}' pe '${property}' naam ka koi sakit member nahi hai.`,
+            span
+          );
+          return KOI;
+        }
+        if (stat.privateOwner !== undefined && this.currentClass?.className !== stat.privateOwner) {
+          this.error(
+            `Arre yaar, '${property}' nijee hai — jamaat '${stat.privateOwner}' ke bahar nahi chalta.`,
+            span
+          );
+        }
+        return stat.type;
+      }
       case "function":
       case "typeParam":
-      case "class":
-        return KOI; // statics are untyped for now
+        return KOI;
     }
   }
 

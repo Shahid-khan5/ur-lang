@@ -73,12 +73,27 @@ export class Checker extends ExpressionChecker {
         parentClass = parentBinding.type;
       }
     }
+    // `jamaat Dabba<T>` — T is a type inside the class's own declarations.
+    const outer = this.scope;
+    this.scope = new Scope(outer);
+    for (const tp of decl.typeParams) this.scope.declareType(tp, typeParam(tp));
+
     const props = new Map<string, PropInfo>();
+    const statics = new Map<string, PropInfo>();
+    const privates = new Set<string>(parentClass?.privates ?? []);
     if (parentClass !== null && parentClass.instance.kind === "object") {
       for (const [k, p] of parentClass.instance.props) props.set(k, p);
     }
+    for (const [k, p] of parentClass?.statics ?? []) statics.set(k, p);
+
     for (const f of decl.fields) {
-      props.set(f.name, { type: this.silently(() => this.resolveType(f.typeAnnotation)), optional: false });
+      const type = this.silently(() => this.resolveType(f.typeAnnotation));
+      (f.isStatic ? statics : props).set(f.name, {
+        type,
+        optional: false,
+        ...(f.isPrivate ? { privateOwner: decl.name } : {}),
+      });
+      if (f.isPrivate) privates.add(f.name);
     }
     let ctorParams: Type[] = parentClass?.ctorParams ?? [];
     let ctorRequired = parentClass?.ctorRequired ?? 0;
@@ -91,18 +106,33 @@ export class Checker extends ExpressionChecker {
       }
       const declaredReturn = this.silently(() => (m.returnType ? this.resolveType(m.returnType) : KOI));
       const returnType = m.isAsync && declaredReturn.kind !== "wada" ? wadaOf(declaredReturn) : declaredReturn;
-      props.set(m.name, {
-        type: {
-          kind: "function",
-          typeParams: [],
-          params: info.types,
-          requiredParams: info.required,
-          restParam: info.rest,
-          returnType,
-        },
-        optional: false,
-      });
+      const target = m.isStatic ? statics : props;
+      const ownership = m.isPrivate ? { privateOwner: decl.name } : {};
+      if (m.accessor === "get") {
+        // A getter reads as a plain property of its return type.
+        target.set(m.name, { type: returnType, optional: false, ...ownership });
+      } else if (m.accessor === "set") {
+        // A setter's property type is what it accepts; a getter of the same name
+        // (if any) has already defined it.
+        const valueType = info.types[0] ?? KOI;
+        if (!target.has(m.name)) target.set(m.name, { type: valueType, optional: false, ...ownership });
+      } else {
+        target.set(m.name, {
+          type: {
+            kind: "function",
+            typeParams: [],
+            params: info.types,
+            requiredParams: info.required,
+            restParam: info.rest,
+            returnType,
+          },
+          optional: false,
+          ...ownership,
+        });
+      }
+      if (m.isPrivate) privates.add(m.name);
     }
+    this.scope = outer;
     return {
       kind: "class",
       name: decl.name,
@@ -110,6 +140,9 @@ export class Checker extends ExpressionChecker {
       ctorParams,
       ctorRequired,
       instance: { kind: "object", props },
+      statics,
+      privates,
+      typeParams: decl.typeParams,
     };
   }
 
@@ -469,6 +502,11 @@ export class Checker extends ExpressionChecker {
             parentClass = parentBinding.type;
           }
         }
+        // A generic class's type parameters are in scope through the whole body.
+        const outerScope = this.scope;
+        this.scope = new Scope(outerScope);
+        for (const tp of stmt.typeParams) this.scope.declareType(tp, typeParam(tp));
+
         // Field initializers.
         for (const f of stmt.fields) {
           const fieldType = this.resolveType(f.typeAnnotation);
@@ -485,10 +523,17 @@ export class Checker extends ExpressionChecker {
         // Methods (banao included), with yeh bound to the instance type.
         const outerClass = this.currentClass;
         for (const m of stmt.methods) {
-          this.currentClass = { instance, parentClass, inBanao: m.name === "banao" };
+          this.currentClass = {
+            className: stmt.name,
+            // A sakit method has no instance: `yeh` is not available in it.
+            instance: m.isStatic ? KOI : instance,
+            parentClass,
+            inBanao: m.name === "banao",
+          };
           this.checkFunctionBody([], m.params, m.name === "banao" ? null : m.returnType, m.body, m.isAsync);
         }
         this.currentClass = outerClass;
+        this.scope = outerScope;
         return;
       }
       case "ForRangeStmt": {

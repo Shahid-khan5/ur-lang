@@ -138,8 +138,15 @@ export interface TemplateLiteral {
 /** `...expr` in array literals, call arguments, and object literals. */
 export interface Spread { kind: "Spread"; argument: Expr; span: Span }
 
-/** `naya Shakhs(args)` → `new Shakhs(args)` */
-export interface NewExpr { kind: "NewExpr"; className: string; args: Expr[]; span: Span }
+/** `naya Shakhs(args)` / `naya Dabba<adad>(args)` → `new Shakhs(args)` */
+export interface NewExpr {
+  kind: "NewExpr";
+  className: string;
+  /** Explicit type arguments; empty means "infer from the constructor call". */
+  typeArgs: TypeNode[];
+  args: Expr[];
+  span: Span;
+}
 
 /** `yeh` → `this` (only valid inside jamaat methods). */
 export interface ThisExpr { kind: "ThisExpr"; span: Span }
@@ -385,6 +392,10 @@ export interface ClassField {
   name: string;
   typeAnnotation: TypeNode;
   init: Expr | null;
+  /** `sakit` — lives on the class, not on instances. */
+  isStatic: boolean;
+  /** `nijee` — only reachable from inside the class. */
+  isPrivate: boolean;
   span: Span;
 }
 
@@ -394,13 +405,18 @@ export interface ClassMethod {
   returnType: TypeNode | null;
   body: BlockStmt;
   isAsync: boolean;
+  isStatic: boolean;
+  isPrivate: boolean;
+  /** `hasil x()` reads as a property; `lagao x(v)` writes as one. */
+  accessor: "get" | "set" | null;
   span: Span;
 }
 
-/** `jamaat Shakhs waris Insaan { ... }` → `class Shakhs extends Insaan { ... }` */
+/** `jamaat Dabba<T> waris Insaan { ... }` → `class Dabba extends Insaan { ... }` */
 export interface ClassDecl {
   kind: "ClassDecl";
   name: string;
+  typeParams: string[];
   parent: string | null;
   fields: ClassField[];
   methods: ClassMethod[]; // banao (constructor) included

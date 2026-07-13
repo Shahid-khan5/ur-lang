@@ -263,21 +263,25 @@ class Formatter {
       }
       case "ClassDecl": {
         const prefix = stmt.exported ? "bhejo " : "";
+        const tp = stmt.typeParams.length > 0 ? `<${stmt.typeParams.join(", ")}>` : "";
         const parent = stmt.parent !== null ? ` waris ${stmt.parent}` : "";
-        this.emit(`${prefix}jamaat ${stmt.name}${parent} {`);
+        this.emit(`${prefix}jamaat ${stmt.name}${tp}${parent} {`);
         this.lastSourceLine = stmt.span.line;
         this.indentLevel++;
         for (const f of stmt.fields) {
           this.flushComments(f.span.line);
+          const mods = `${f.isStatic ? "sakit " : ""}${f.isPrivate ? "nijee " : ""}`;
           const init = f.init !== null ? ` = ${this.expr(f.init, 0)}` : "";
-          this.emit(`${f.name}: ${this.type(f.typeAnnotation)}${init};`);
+          this.emit(`${mods}${f.name}: ${this.type(f.typeAnnotation)}${init};`);
           this.lastSourceLine = f.span.line;
         }
         for (const m of stmt.methods) {
           this.flushComments(m.span.line);
           this.blankBetween(m.span.line);
+          const mods = `${m.isStatic ? "sakit " : ""}${m.isPrivate ? "nijee " : ""}`;
+          const acc = m.accessor === "get" ? "hasil " : m.accessor === "set" ? "lagao " : "";
           const ret = m.returnType !== null ? `: ${this.type(m.returnType)}` : "";
-          this.emit(`${m.name}(${this.params(m.params)})${ret} {`);
+          this.emit(`${mods}${acc}${m.name}(${this.params(m.params)})${ret} {`);
           this.lastSourceLine = m.span.line;
           this.indentLevel++;
           this.statements(m.body.body, m.body.endLine ?? Infinity);
@@ -427,8 +431,10 @@ class Formatter {
       }
       case "Call":
         return `${this.expr(e.callee, 8)}${e.optional ? "?.(" : "("}${e.args.map((a) => this.expr(a, 0)).join(", ")})`;
-      case "NewExpr":
-        return `naya ${e.className}(${e.args.map((a) => this.expr(a, 0)).join(", ")})`;
+      case "NewExpr": {
+        const targs = e.typeArgs.length > 0 ? `<${e.typeArgs.map((t) => this.type(t)).join(", ")}>` : "";
+        return `naya ${e.className}${targs}(${e.args.map((a) => this.expr(a, 0)).join(", ")})`;
+      }
       case "SuperCall":
         return `buzurg(${e.args.map((a) => this.expr(a, 0)).join(", ")})`;
       case "SuperMember":

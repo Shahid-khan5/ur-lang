@@ -531,7 +531,29 @@ export abstract class ExpressionChecker extends CheckerBase {
           this.error(`Arre yaar, '${expr.className}' jamaat nahi hai — 'naya' sirf jamaat pe chalta hai.`, expr.span);
           return KOI;
         }
-        const cls = binding.type;
+        let cls = binding.type;
+        // `naya Dabba<adad>(…)` — explicit type args; otherwise infer them from
+        // the constructor arguments, exactly like a generic call.
+        if (cls.typeParams.length > 0) {
+          const subst = new Map<string, Type>();
+          if (expr.typeArgs.length > 0) {
+            if (expr.typeArgs.length !== cls.typeParams.length) {
+              this.error(
+                `Arre yaar, '${cls.name}' ko ${cls.typeParams.length} type argument chahiye, ${expr.typeArgs.length} diye.`,
+                expr.span
+              );
+            }
+            cls.typeParams.forEach((name, i) => {
+              const node = expr.typeArgs[i];
+              subst.set(name, node === undefined ? KOI : this.resolveType(node));
+            });
+          } else {
+            for (const [name, t] of inferTypeArguments(cls.typeParams, cls.ctorParams, argTypes)) {
+              subst.set(name, t);
+            }
+          }
+          cls = substitute(cls, subst) as typeof cls;
+        }
         const hasSpread = expr.args.some((a) => a.kind === "Spread");
         if (!hasSpread) {
           if (expr.args.length < cls.ctorRequired || expr.args.length > cls.ctorParams.length) {

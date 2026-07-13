@@ -340,6 +340,9 @@ class Codegen {
         for (const f of stmt.fields) {
           this.indent();
           this.mark(f.span);
+          // `nijee` is a compile-time rule; the emitted field is a plain one, so
+          // JS interop (JSON, spread, devtools) keeps working.
+          if (f.isStatic) this.write("static ");
           this.write(f.name);
           if (f.init !== null) {
             this.write(" = ");
@@ -354,7 +357,11 @@ class Codegen {
           if (m.name === "banao") {
             this.write("constructor(");
           } else {
-            this.write(`${m.isAsync ? "async " : ""}${m.name}(`);
+            if (m.isStatic) this.write("static ");
+            if (m.accessor === "get") this.write("get ");
+            else if (m.accessor === "set") this.write("set ");
+            if (m.isAsync) this.write("async ");
+            this.write(`${m.name}(`);
           }
           this.params(m.params);
           this.write(") {");

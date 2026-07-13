@@ -348,6 +348,15 @@ export abstract class ExpressionParser extends ParserBase {
       case TokenKind.Naya: {
         this.next();
         const className = this.expect(TokenKind.Identifier, "jamaat ka naam");
+        // `naya Dabba<adad>(…)` — explicit type arguments; otherwise inferred.
+        const typeArgs: TypeNode[] = [];
+        if (this.at(TokenKind.Lt)) {
+          this.next();
+          do {
+            typeArgs.push(this.typeNode());
+          } while (this.matchListComma(TokenKind.Gt));
+          this.expect(TokenKind.Gt, ">");
+        }
         this.expect(TokenKind.LParen, "(");
         const args: Expr[] = [];
         if (!this.at(TokenKind.RParen)) {
@@ -361,7 +370,7 @@ export abstract class ExpressionParser extends ParserBase {
           } while (this.matchListComma(TokenKind.RParen));
         }
         this.expect(TokenKind.RParen, ")");
-        return { kind: "NewExpr", className: className.value, args, span: this.span(t) };
+        return { kind: "NewExpr", className: className.value, typeArgs, args, span: this.span(t) };
       }
       case TokenKind.Buzurg: {
         this.next();

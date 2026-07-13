@@ -246,6 +246,14 @@ export class Parser extends ExpressionParser {
   protected classDecl(exported: boolean): Stmt {
     const kw = this.expect(TokenKind.Jamaat, "jamaat");
     const name = this.expect(TokenKind.Identifier, "jamaat ka naam");
+    const typeParams: string[] = [];
+    if (this.at(TokenKind.Lt)) {
+      this.next();
+      do {
+        typeParams.push(this.expect(TokenKind.Identifier, "type parameter").value);
+      } while (this.matchListComma(TokenKind.Gt));
+      this.expect(TokenKind.Gt, ">");
+    }
     let parent: string | null = null;
     if (this.match(TokenKind.Waris)) {
       parent = this.expect(TokenKind.Identifier, "waris jamaat ka naam").value;
@@ -257,17 +265,42 @@ export class Parser extends ExpressionParser {
       if (this.at(TokenKind.EOF)) {
         this.fail("Arre yaar, jamaat band karna bhool gaye — '}' nahi mila.", this.peek());
       }
+      // Modifiers, in any order: sakit (static), nijee (private).
+      let isStatic = false;
+      let isPrivate = false;
+      for (;;) {
+        if (this.match(TokenKind.Sakit) !== null) { isStatic = true; continue; }
+        if (this.match(TokenKind.Nijee) !== null) { isPrivate = true; continue; }
+        break;
+      }
+      // `hasil naam()` / `lagao naam(v)` — accessors.
+      let accessor: "get" | "set" | null = null;
+      if (this.match(TokenKind.Hasil) !== null) accessor = "get";
+      else if (this.match(TokenKind.Lagao) !== null) accessor = "set";
+
       const member = this.expect(TokenKind.Identifier, "field ya method ka naam");
       if (this.at(TokenKind.LParen)) {
-        // Method (banao = constructor).
         const params = this.paramList();
         let returnType: TypeNode | null = null;
         if (this.match(TokenKind.Colon)) returnType = this.typeNode();
         this.asyncStack.push(false);
         const body = this.block();
         const isAsync = this.asyncStack.pop()!;
-        methods.push({ name: member.value, params, returnType, body, isAsync, span: this.span(member) });
+        methods.push({
+          name: member.value,
+          params,
+          returnType,
+          body,
+          isAsync,
+          isStatic,
+          isPrivate,
+          accessor,
+          span: this.span(member),
+        });
         continue;
+      }
+      if (accessor !== null) {
+        this.fail("Arre yaar, 'hasil'/'lagao' method hote hain — '(' aana chahiye.", this.peek());
       }
       // Field: naam: type [= init];
       this.expect(TokenKind.Colon, ":");
@@ -275,10 +308,19 @@ export class Parser extends ExpressionParser {
       let init: Expr | null = null;
       if (this.match(TokenKind.Assign)) init = this.expression();
       this.semicolon();
-      fields.push({ name: member.value, typeAnnotation, init, span: this.span(member) });
+      fields.push({ name: member.value, typeAnnotation, init, isStatic, isPrivate, span: this.span(member) });
     }
     this.next(); // }
-    return { kind: "ClassDecl", name: name.value, parent, fields, methods, exported, span: this.span(kw) };
+    return {
+      kind: "ClassDecl",
+      name: name.value,
+      typeParams,
+      parent,
+      fields,
+      methods,
+      exported,
+      span: this.span(kw),
+    };
   }
 
   protected typeAliasDecl(exported: boolean): Stmt {

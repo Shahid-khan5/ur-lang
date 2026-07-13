@@ -4,6 +4,13 @@
 export interface PropInfo {
   type: Type;
   optional: boolean;
+  /**
+   * Set for a `nijee` class member: the class that owns it. The property stays
+   * in the type (the class's own code needs it) but is unreachable from
+   * outside, and it makes the type unassignable to a plain object type that
+   * merely happens to declare the same name.
+   */
+  privateOwner?: string;
 }
 
 export type Type =
@@ -38,6 +45,12 @@ export type Type =
       ctorRequired: number;
       /** The structural type of instances (fields + methods, incl. inherited). */
       instance: Type;
+      /** `sakit` members, reached through the class itself (`Ginti.kul`). */
+      statics: Map<string, PropInfo>;
+      /** `nijee` member names — present on the instance, but only from inside. */
+      privates: ReadonlySet<string>;
+      /** `jamaat Dabba<T>` — resolved at `naya Dabba<adad>(…)`. */
+      typeParams: string[];
     };
 
 export function functionOf(
@@ -209,6 +222,9 @@ export function assignable(target: Type, source: Type): boolean {
           if (!targetProp.optional) return false;
           continue;
         }
+        // A `nijee` member only satisfies the same class's own member — a plain
+        // object type declaring the same name must not be able to stand in.
+        if (sourceProp.privateOwner !== targetProp.privateOwner) return false;
         if (!assignable(targetProp.type, sourceProp.type)) return false;
       }
       return true;
@@ -290,6 +306,18 @@ export function substitute(t: Type, subst: ReadonlyMap<string, Type>): Type {
         restParam: t.restParam === null ? null : substitute(t.restParam, subst),
         returnType: substitute(t.returnType, subst),
       };
+    case "class": {
+      // `naya Dabba<adad>(…)` — push the argument through the whole class type.
+      const statics = new Map<string, PropInfo>();
+      for (const [k, p] of t.statics) statics.set(k, { type: substitute(p.type, subst), optional: p.optional });
+      return {
+        ...t,
+        typeParams: t.typeParams.filter((name) => !subst.has(name)),
+        ctorParams: t.ctorParams.map((p) => substitute(p, subst)),
+        instance: substitute(t.instance, subst),
+        statics,
+      };
+    }
     default:
       return t;
   }
