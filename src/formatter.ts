@@ -3,7 +3,8 @@
 // strings), preserving comments and single blank lines between statements.
 import { tokenize, Comment } from "./lexer.js";
 import { parse } from "./parser.js";
-import type { BlockStmt, Expr, Param, Stmt, TypeNode } from "./ast.js";
+import { cleanJsxText } from "./codegen.js";
+import type { BlockStmt, Expr, JsxChild, JsxElement, JsxFragment, Param, Stmt, TypeNode } from "./ast.js";
 
 const PRECEDENCE: Record<string, number> = {
   "||": 1, "&&": 2, "==": 3, "!=": 3, "<": 4, ">": 4, "<=": 4, ">=": 4,
@@ -17,10 +18,11 @@ class Formatter {
   private commentIndex = 0;
   private lastSourceLine = 0;
 
-  constructor(source: string) {
+  constructor(source: string, options?: FormatOptions) {
+    const jsx = options?.jsx === true;
     this.comments = [];
-    tokenize(source, this.comments);
-    const program = parse(source);
+    tokenize(source, this.comments, { jsx });
+    const program = parse(source, { jsx });
     this.statements(program.body, Infinity);
     this.flushComments(Infinity);
   }
@@ -364,7 +366,34 @@ class Formatter {
         const bodyStmts = e.body.body.map((s) => this.inlineStmt(s)).join(" ");
         return `kaam (${this.params(e.params)})${ret} { ${bodyStmts} }`.replace("{  }", "{ }");
       }
+      case "JsxElement":
+      case "JsxFragment":
+        return this.jsx(e);
     }
+  }
+
+  /** Compact inline JSX; multi-line indentation text collapses (same output after codegen). */
+  private jsx(e: JsxElement | JsxFragment): string {
+    const children = e.children.map((c) => this.jsxChild(c)).filter((s) => s !== "").join("");
+    if (e.kind === "JsxFragment") return `<>${children}</>`;
+    const attrs = e.attributes.map((a) =>
+      a.kind === "JsxSpreadAttribute"
+        ? `{...${this.expr(a.argument, 0)}}`
+        : a.value === null
+          ? a.name
+          : a.value.kind === "StringLiteral"
+            ? `${a.name}=${JSON.stringify(a.value.value)}`
+            : `${a.name}={${this.expr(a.value, 0)}}`
+    );
+    const head = [e.tagName, ...attrs].join(" ");
+    if (e.selfClosing && e.children.length === 0) return `<${head}/>`;
+    return `<${head}>${children}</${e.tagName}>`;
+  }
+
+  private jsxChild(c: JsxChild): string {
+    if (c.kind === "JsxText") return cleanJsxText(c.value);
+    if (c.kind === "JsxExprContainer") return `{${this.expr(c.expr, 0)}}`;
+    return this.jsx(c);
   }
 
   /** Compact single-line rendering for function-expression bodies. */
@@ -379,7 +408,12 @@ class Formatter {
   }
 }
 
+export interface FormatOptions {
+  /** Enable JSX (.urx files). */
+  jsx?: boolean;
+}
+
 /** Formats UrLang source into canonical style. Throws UrSyntaxError on parse errors. */
-export function format(source: string): string {
-  return new Formatter(source).toString();
+export function format(source: string, options?: FormatOptions): string {
+  return new Formatter(source, options).toString();
 }

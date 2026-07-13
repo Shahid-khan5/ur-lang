@@ -1,0 +1,14 @@
+// Component props are checked like TSX: unknown, mistyped, and missing props.
+kaam Ginti(props: { shuru: adad, laqab?: lafz }): koi {
+  wapas <b>{props.shuru}</b>;
+}
+
+bhejo kaam App(): koi {
+  wapas (
+    <div>
+      <Ginti shuru={0} faltu={1}/>
+      <Ginti shuru="ek"/>
+      <Ginti/>
+    </div>
+  );
+}

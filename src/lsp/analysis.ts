@@ -47,14 +47,19 @@ export interface Analysis {
 
 export function analyze(
   source: string,
-  options: { resolveModule?: (specifier: string) => ModuleExports | null; ambient?: ModuleExports[] } = {}
+  options: {
+    resolveModule?: (specifier: string) => ModuleExports | null;
+    ambient?: ModuleExports[];
+    /** Enable JSX parsing (.urx documents). */
+    jsx?: boolean;
+  } = {}
 ): Analysis {
   const symbols: RecordedSymbol[] = [];
   const bindings: RecordedSymbol[] = [];
   let diagnostics: UrError[] = [];
 
   try {
-    const program = parse(source);
+    const program = parse(source, { jsx: options.jsx === true });
     const result = checkProgram(program, {
       ...(options.resolveModule ? { resolveModule: options.resolveModule } : {}),
       ...(options.ambient ? { ambient: options.ambient } : {}),

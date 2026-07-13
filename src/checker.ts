@@ -4,6 +4,8 @@ import type {
   Expr,
   FunctionDecl,
   FunctionExpr,
+  JsxChild,
+  JsxElement,
   Param,
   Program,
   Span,
@@ -60,6 +62,15 @@ export interface ModuleExports {
   values: Map<string, Type>;
   types: Map<string, Type>;
   defaultType: Type | null;
+  /**
+   * True when this surface is known to be incomplete — it came from a `.d.ts`
+   * whose declarations we only partially understand (our TS support is a
+   * subset: `export =`, namespaces, and overloads don't all survive). Names we
+   * didn't capture degrade to `koi` instead of being reported as missing —
+   * a false "no such export" is far worse than a missing type. Surfaces from
+   * real .ur/.urx modules are complete, so unknown names there stay an error.
+   */
+  partial?: boolean;
 }
 
 export interface CheckOptions {
@@ -549,7 +560,8 @@ class Checker {
         }
         if (stmt.namespaceName !== null) {
           let nsType: Type = KOI;
-          if (resolved !== null) {
+          // A partial surface would reject valid members it simply didn't see.
+          if (resolved !== null && resolved.partial !== true) {
             const props = new Map<string, PropInfo>();
             for (const [k, t] of resolved.values) props.set(k, { type: t, optional: false });
             nsType = { kind: "object", props };
@@ -570,6 +582,14 @@ class Checker {
           const valueType = resolved.values.get(name);
           const aliasType = resolved.types.get(name);
           if (valueType === undefined && aliasType === undefined) {
+            if (resolved.partial === true) {
+              // We couldn't fully read this package's .d.ts — assume the name
+              // exists and type it koi rather than reporting a false error.
+              if (!this.declareValue(name, KOI, false, stmt.span)) {
+                this.error(`Arre yaar, '${name}' pehle se declared hai.`, stmt.span);
+              }
+              continue;
+            }
             this.error(`Arre yaar, '${stmt.source}' mein '${name}' naam ka koi export nahi hai.`, stmt.span);
             continue;
           }
@@ -1355,6 +1375,109 @@ class Checker {
         };
         this.checkFunctionBody([], expr.params, expr.returnType, expr.body, expr.isAsync);
         return fnType;
+      }
+      case "JsxElement":
+        return this.jsxElement(expr);
+      case "JsxFragment":
+        for (const child of expr.children) this.jsxChild(child);
+        return KOI;
+    }
+    return KOI;
+  }
+
+  // ---------- JSX ----------
+
+  private jsxChild(child: JsxChild): void {
+    if (child.kind === "JsxText") return;
+    if (child.kind === "JsxExprContainer") this.expr(child.expr);
+    else this.expr(child);
+  }
+
+  /** Resolves a (possibly dotted) capitalized tag name as a value. */
+  private jsxComponentType(tagName: string, span: Span): Type | null {
+    const parts = tagName.split(".");
+    const binding = this.scope.lookup(parts[0]!);
+    if (binding === null) {
+      this.error(`Arre yaar, '<${parts[0]}>' component declare hi nahi kiya.`, span);
+      return null;
+    }
+    this.options.symbols?.reference(parts[0]!, span, binding.type, binding.declSpan ?? null);
+    let t = binding.type;
+    for (let i = 1; i < parts.length; i++) t = this.memberType(t, parts[i]!, span);
+    return t;
+  }
+
+  /**
+   * Intrinsic tags (`<div>`) accept any attribute but each value expression is
+   * checked. Component tags (`<App>`) are checked like TSX: props must match
+   * the component's first parameter — wrong types, unknown props, and missing
+   * required props are all errors. A spread attr makes the set open-ended, so
+   * only the named attrs' types are checked. JSX children satisfy `children`.
+   */
+  private jsxElement(expr: JsxElement): Type {
+    for (const child of expr.children) this.jsxChild(child);
+    const intrinsic = /^[a-z]/.test(expr.tagName) || expr.tagName.includes("-");
+
+    let hasSpread = false;
+    for (const attr of expr.attributes) {
+      if (attr.kind === "JsxSpreadAttribute") {
+        hasSpread = true;
+        this.expr(attr.argument);
+      }
+    }
+
+    let expectedProps: ReadonlyMap<string, PropInfo> | null = null;
+    if (!intrinsic) {
+      const componentType = this.jsxComponentType(expr.tagName, expr.span);
+      if (componentType !== null) {
+        if (componentType.kind === "function") {
+          const propsParam = componentType.params[0];
+          if (propsParam === undefined) expectedProps = new Map();
+          else if (propsParam.kind === "object") expectedProps = propsParam.props;
+          // Non-object props param (koi etc.) — attrs stay loosely checked.
+        } else if (componentType.kind !== "koi" && componentType.kind !== "class") {
+          this.error(
+            `Arre yaar, '<${expr.tagName}>' component nahi hai — yeh '${typeName(componentType)}' hai.`,
+            expr.span
+          );
+        }
+      }
+    }
+
+    const provided = new Set<string>();
+    for (const attr of expr.attributes) {
+      if (attr.kind !== "JsxAttribute") continue;
+      provided.add(attr.name);
+      const expected = expectedProps?.get(attr.name);
+      const valueType =
+        attr.value === null
+          ? literal(true)
+          : expected !== undefined
+            ? this.exprWithContext(attr.value, expected.type)
+            : this.expr(attr.value);
+      if (expected === undefined) {
+        if (expectedProps !== null && !hasSpread) {
+          this.error(`Arre yaar, '<${expr.tagName}>' ka '${attr.name}' naam ka koi prop nahi hai.`, attr.span);
+        }
+        continue;
+      }
+      if (!assignable(expected.type, valueType)) {
+        this.error(
+          `Arre yaar, prop '${attr.name}' ka type '${typeName(expected.type)}' hona chahiye, '${typeName(valueType)}' nahi.`,
+          attr.span
+        );
+      }
+    }
+
+    if (expectedProps !== null && !hasSpread) {
+      const hasChildren = expr.children.length > 0;
+      for (const [key, prop] of expectedProps) {
+        if (prop.optional || provided.has(key)) continue;
+        if (key === "children" && hasChildren) continue;
+        this.error(
+          `Arre yaar, '<${expr.tagName}>' ko '${key}' prop dena zaroori hai ('${typeName(prop.type)}').`,
+          expr.span
+        );
       }
     }
     return KOI;

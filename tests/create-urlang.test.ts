@@ -32,7 +32,7 @@ function urFilesUnder(root: string): string[] {
     for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
       const p = path.join(d, entry.name);
       if (entry.isDirectory()) walk(p);
-      else if (entry.name.endsWith(".ur")) found.push(p);
+      else if (entry.name.endsWith(".ur") || entry.name.endsWith(".urx")) found.push(p);
     }
   };
   walk(root);
@@ -85,6 +85,33 @@ describe("create-urlang", () => {
     // The bridge types are enforced:
     const bad = compile("bridge.greet(42);", { fileName: "x.ur", ambient });
     expect(bad.diagnostics).toHaveLength(1);
+  });
+
+  it("scaffolds the react template with type-checked .urx components", () => {
+    const app = scaffold("react-app", "react");
+    expect(fs.existsSync(path.join(app, "src", "App.urx"))).toBe(true);
+    const pkg = JSON.parse(fs.readFileSync(path.join(app, "package.json"), "utf8"));
+    expect(pkg.dependencies.react).toBeTruthy();
+    for (const f of urFilesUnder(app)) {
+      const result = compile(fs.readFileSync(f, "utf8"), { fileName: f, loadModule: fsModuleLoader });
+      expect(result.diagnostics.map((d) => d.message), f).toEqual([]);
+    }
+    // Props are enforced across .urx modules, TS-style.
+    const bad = compile('lao { Ginti } "./Ginti.urx" se;\nbhejo pakka el = <Ginti shuru="galat"/>;', {
+      fileName: path.join(app, "src", "bad.urx"),
+      loadModule: fsModuleLoader,
+    });
+    expect(bad.diagnostics).toHaveLength(1);
+  });
+
+  it("scaffolds the tauri-react template (Rust backend + React frontend in UrLang)", () => {
+    const app = scaffold("tauri-react-app", "tauri-react");
+    expect(fs.existsSync(path.join(app, "src-tauri", "src", "main.rs"))).toBe(true);
+    expect(fs.existsSync(path.join(app, "src", "App.urx"))).toBe(true);
+    for (const f of urFilesUnder(app)) {
+      const result = compile(fs.readFileSync(f, "utf8"), { fileName: f, loadModule: fsModuleLoader });
+      expect(result.diagnostics.map((d) => d.message), f).toEqual([]);
+    }
   });
 
   it("refuses to overwrite a non-empty directory", () => {

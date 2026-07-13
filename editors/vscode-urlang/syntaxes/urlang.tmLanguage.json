@@ -4,6 +4,7 @@
   "scopeName": "source.urlang",
   "patterns": [
     { "include": "#comments" },
+    { "include": "#jsx" },
     { "include": "#strings" },
     { "include": "#numbers" },
     { "include": "#keywords" },
@@ -14,6 +15,50 @@
     { "include": "#operators" }
   ],
   "repository": {
+    "jsx": {
+      "comment": "JSX elements in .urx files: <div a={x}>...</div>, <Comp/>, fragments.",
+      "patterns": [
+        {
+          "comment": "Opening/self-closing tag. The lookbehind keeps generics (kaam f<T>) from reading as tags.",
+          "begin": "(?<![A-Za-z0-9_$])(<)([A-Za-z_$][-A-Za-z0-9_$.]*)",
+          "end": "(/?>)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.tag.begin.urlang" },
+            "2": { "name": "entity.name.tag.urlang" }
+          },
+          "endCaptures": { "1": { "name": "punctuation.definition.tag.end.urlang" } },
+          "patterns": [
+            {
+              "name": "entity.other.attribute-name.urlang",
+              "match": "[A-Za-z_$][-A-Za-z0-9_$]*(?=\\s*=|\\s|/|>)"
+            },
+            { "include": "#strings" },
+            {
+              "comment": "{expression} inside a tag — full UrLang.",
+              "begin": "\\{",
+              "end": "\\}",
+              "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.urlang" } },
+              "endCaptures": { "0": { "name": "punctuation.section.embedded.end.urlang" } },
+              "patterns": [{ "include": "$self" }]
+            },
+            { "name": "keyword.operator.assignment.urlang", "match": "=" }
+          ]
+        },
+        {
+          "name": "punctuation.definition.tag.urlang",
+          "comment": "Closing tag and fragment delimiters.",
+          "match": "(</)([A-Za-z_$][-A-Za-z0-9_$.]*)?(>)|(<>)"
+        },
+        {
+          "comment": "{expression} between tags.",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.urlang" } },
+          "endCaptures": { "0": { "name": "punctuation.section.embedded.end.urlang" } },
+          "patterns": [{ "include": "$self" }]
+        }
+      ]
+    },
     "comments": {
       "patterns": [
         { "name": "comment.line.double-slash.urlang", "match": "//.*$" },

@@ -1,10 +1,28 @@
-import type { Expr, Program, Span, Stmt } from "./ast.js";
+import type { Expr, JsxChild, JsxElement, JsxFragment, Program, Span, Stmt } from "./ast.js";
 import { SourceMapBuilder } from "./sourcemap.js";
 
 export interface CodegenOptions {
   /** Rewrite `./x.ur` import specifiers to `./x.js` (used by the CLI's file builds). */
   rewriteUrImports?: boolean;
   sourceMap?: SourceMapBuilder | null;
+  /** Package whose `<source>/jsx-runtime` provides jsx/jsxs/Fragment. Default: "react". */
+  jsxImportSource?: string;
+}
+
+/**
+ * Cleans JSX text the way Babel does: indentation-only whitespace around
+ * newlines disappears, interior single-line spacing is kept.
+ */
+export function cleanJsxText(raw: string): string {
+  const lines = raw.split("\n");
+  const kept: string[] = [];
+  for (let idx = 0; idx < lines.length; idx++) {
+    let line = lines[idx]!;
+    if (idx !== 0) line = line.replace(/^[ \t\r]+/, "");
+    if (idx !== lines.length - 1) line = line.replace(/[ \t\r]+$/, "");
+    if (line !== "") kept.push(line);
+  }
+  return kept.join(" ");
 }
 
 // Operator precedence, used to insert parentheses only where needed.
@@ -45,14 +63,28 @@ class Codegen {
   private genCol = 0;
   private readonly rewriteUrImports: boolean;
   private readonly map: SourceMapBuilder | null;
+  private readonly jsxImportSource: string;
+  private usedJsx = false;
+  private usedJsxs = false;
+  private usedFragment = false;
 
   constructor(options: CodegenOptions) {
     this.rewriteUrImports = options.rewriteUrImports ?? false;
     this.map = options.sourceMap ?? null;
+    this.jsxImportSource = options.jsxImportSource ?? "react";
   }
 
   generate(program: Program): string {
     for (const stmt of program.body) this.stmt(stmt);
+    // Appended (not prepended) so earlier source-map positions stay valid;
+    // ES import declarations are hoisted, so placement is immaterial.
+    if (this.usedJsx || this.usedJsxs || this.usedFragment) {
+      const names: string[] = [];
+      if (this.usedJsx) names.push("jsx as _jsx");
+      if (this.usedJsxs) names.push("jsxs as _jsxs");
+      if (this.usedFragment) names.push("Fragment as _Fragment");
+      this.out.push(`import { ${names.join(", ")} } from ${JSON.stringify(this.jsxImportSource + "/jsx-runtime")};\n`);
+    }
     return this.out.join("");
   }
 
@@ -363,8 +395,8 @@ class Codegen {
   }
 
   private rewriteSource(source: string): string {
-    if (this.rewriteUrImports && source.endsWith(".ur")) {
-      return source.slice(0, -3) + ".js";
+    if (this.rewriteUrImports && (source.endsWith(".ur") || source.endsWith(".urx"))) {
+      return source.replace(/\.urx?$/, ".js");
     }
     return source;
   }
@@ -557,7 +589,98 @@ class Codegen {
       case "SuperMember":
         this.write(`super.${e.property}`);
         return;
+      case "JsxElement":
+      case "JsxFragment":
+        this.jsx(e);
+        return;
     }
+  }
+
+  // ---------- JSX ----------
+
+  /** Intrinsic tags (lowercase or dashed) become strings; components are references. */
+  private jsxTag(tagName: string): string {
+    return /^[a-z]/.test(tagName) || tagName.includes("-") ? JSON.stringify(tagName) : tagName;
+  }
+
+  /**
+   * Emits the standard automatic-runtime call: `_jsx(tag, props)` /
+   * `_jsxs(tag, { ...props, children: [...] })`, with `key` as the third
+   * argument — exactly what TSX emits, so any jsx-runtime works.
+   */
+  private jsx(e: JsxElement | JsxFragment): void {
+    this.mark(e.span);
+    const attrs = e.kind === "JsxElement" ? e.attributes : [];
+    let keyValue: Expr | null = null;
+    const props: (() => void)[] = [];
+    for (const attr of attrs) {
+      if (attr.kind === "JsxSpreadAttribute") {
+        props.push(() => {
+          this.write("...");
+          this.expr(attr.argument, 8);
+        });
+        continue;
+      }
+      if (attr.name === "key" && attr.value !== null) {
+        keyValue = attr.value;
+        continue;
+      }
+      props.push(() => {
+        this.write(/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(attr.name) ? attr.name : JSON.stringify(attr.name));
+        this.write(": ");
+        if (attr.value === null) this.write("true");
+        else this.expr(attr.value, 0);
+      });
+    }
+
+    const children: (() => void)[] = [];
+    for (const child of e.children) {
+      if (child.kind === "JsxText") {
+        const text = cleanJsxText(child.value);
+        if (text !== "") children.push(() => this.write(JSON.stringify(text)));
+      } else if (child.kind === "JsxExprContainer") {
+        children.push(() => this.expr(child.expr, 0));
+      } else {
+        children.push(() => this.jsx(child));
+      }
+    }
+    if (children.length === 1) {
+      props.push(() => {
+        this.write("children: ");
+        children[0]!();
+      });
+    } else if (children.length > 1) {
+      props.push(() => {
+        this.write("children: [");
+        children.forEach((emit, i) => {
+          if (i > 0) this.write(", ");
+          emit();
+        });
+        this.write("]");
+      });
+    }
+
+    const fn = children.length > 1 ? "_jsxs" : "_jsx";
+    if (fn === "_jsxs") this.usedJsxs = true;
+    else this.usedJsx = true;
+    if (e.kind === "JsxFragment") this.usedFragment = true;
+
+    this.write(`${fn}(${e.kind === "JsxElement" ? this.jsxTag(e.tagName) : "_Fragment"}, `);
+    if (props.length === 0) {
+      this.write("{}");
+    } else {
+      this.write("{ ");
+      props.forEach((emit, i) => {
+        if (i > 0) this.write(", ");
+        emit();
+      });
+      this.write(" }");
+    }
+    if (keyValue !== null) {
+      this.write(", ");
+      this.expr(keyValue, 0);
+    }
+    this.write(")");
   }
 }
 

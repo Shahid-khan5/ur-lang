@@ -108,9 +108,12 @@ export class BuildWatcher {
     }
     const newDeps = new Set<string>();
     try {
-      const program = parse(source);
+      const program = parse(source, { jsx: file.endsWith(".urx") });
       for (const stmt of program.body) {
-        if ((stmt.kind === "ImportStmt" || stmt.kind === "ReExportStmt") && stmt.source.endsWith(".ur")) {
+        if (
+          (stmt.kind === "ImportStmt" || stmt.kind === "ReExportStmt") &&
+          (stmt.source.endsWith(".ur") || stmt.source.endsWith(".urx"))
+        ) {
           if (stmt.source.startsWith(".")) {
             newDeps.add(path.resolve(path.dirname(file), stmt.source));
           }

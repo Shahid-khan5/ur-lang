@@ -120,7 +120,7 @@ async function main(argv: string[]): Promise<number> {
         }
         if (failed) return 1;
         fs.writeFileSync(path.join(tmp, "package.json"), '{"type":"module"}');
-        const entryJs = path.join(tmp, path.basename(entry).replace(/\.ur$/, ".js"));
+        const entryJs = path.join(tmp, path.basename(entry).replace(/\.urx?$/, ".js"));
         const proc = spawnSync(process.execPath, ["--enable-source-maps", entryJs], { stdio: "inherit" });
         return proc.status ?? 1;
       } finally {
@@ -176,7 +176,7 @@ async function main(argv: string[]): Promise<number> {
       for (const file of files) {
         const source = fs.readFileSync(file, "utf8");
         try {
-          const formatted = format(source);
+          const formatted = format(source, { jsx: file.endsWith(".urx") });
           if (checkOnly) {
             if (formatted !== source) {
               process.stderr.write(`${file}: format theek nahi hai (urlang fmt chalao)\n`);

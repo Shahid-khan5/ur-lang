@@ -1,6 +1,6 @@
 # UrLang Language Specification
 
-Version 1.0 — covers the syntax and typing rules implemented by the reference compiler. The conformance suite (`tests/conformance/`) executes examples of every rule below.
+Version 1.1 — covers the syntax and typing rules implemented by the reference compiler. The conformance suite (`tests/conformance/`) executes examples of every rule below.
 
 ## 1. Lexical structure
 
@@ -10,6 +10,7 @@ Version 1.0 — covers the syntax and typing rules implemented by the reference 
 - **Strings:** `"..."` or `'...'` with escapes `\n \t \r \\ \" \' \0`.
 - **Template strings:** `` `text ${expr} text` `` with escapes ``\` \$ \\ \n \t \r``; may span lines.
 - **Reserved words:** `rakho pakka bolo agar warna jab tak bas agla kaam wapas sach jhoot khaali bhejo lao se bahar har mein koshish pakro akhir phenko intezar qisim asal sab jamaat naya yeh waris buzurg`.
+- **File extensions:** `.ur`, and `.urx` for files containing JSX. In a `.urx` file, a `<` in operand position (i.e. not after a value) followed by a name or `>` opens a JSX element; everywhere else `<` is less-than. `.ur` files never lex JSX, so `a < b` is unambiguous there.
 
 ## 2. Grammar (EBNF)
 
@@ -78,10 +79,19 @@ primary        = NUMBER | STRING | template | "sach" | "jhoot" | "khaali"
                | IDENT | "yeh" | "(" expr ")" | arrayLit | objectLit
                | "kaam" "(" [paramList] ")" [":" type] block        (* fn expression *)
                | "naya" IDENT "(" [argList] ")"
-               | "buzurg" ("(" [argList] ")" | "." IDENT) ;
+               | "buzurg" ("(" [argList] ")" | "." IDENT)
+               | jsxElement ;                                       (* .urx files only *)
 arrayLit       = "[" [arg { "," arg }] "]" ;
 objectLit      = "{" [objEntry { "," objEntry }] "}" ;
 objEntry       = (IDENT | STRING) ":" expr | "..." expr ;
+
+(* JSX — only in .urx files, where `<` in operand position opens an element. *)
+jsxElement     = "<" JSXNAME { jsxAttr } ("/>" | ">" { jsxChild } "</" JSXNAME ">")
+               | "<" ">" { jsxChild } "</" ">" ;                    (* fragment *)
+jsxAttr        = JSXNAME ["=" (STRING | "{" expr "}")]              (* bare attr = sach *)
+               | "{" "..." expr "}" ;
+jsxChild       = JSXTEXT | "{" [expr] "}" | jsxElement ;
+JSXNAME        = IDENT { ("-" | ".") IDENT } ;
 ```
 
 ## 3. Types
@@ -132,11 +142,23 @@ Within `agar`/ternary branches, a variable's type narrows when the condition is:
 
 ### 3.7 Modules
 
-`bhejo` exports values, types, classes, defaults (`asal`), and re-exports. `lao` imports named/default (`asal`)/namespace (`sab`) bindings. Cross-module checking gives imports their real exported types when the host (CLI/Vite plugin/LSP) can resolve the file; unresolvable specifiers (npm packages) degrade to `koi`. Ambient `.d.ts` surfaces may inject typed globals. `bahar x;` declares an untyped (`koi`) global.
+`bhejo` exports values, types, classes, defaults (`asal`), and re-exports. `lao` imports named/default (`asal`)/namespace (`sab`) bindings. Cross-module checking gives imports their real exported types when the host (CLI/Vite plugin/LSP) can resolve the file; unresolvable specifiers (npm packages) degrade to `koi`. Ambient `.d.ts` surfaces may inject typed globals. `bahar x;` declares an untyped (`koi`) global. `.ur` and `.urx` modules import each other freely, with types intact in both directions.
+
+### 3.8 JSX (`.urx`)
+
+A JSX expression has type `koi`. Tag names starting with a lowercase letter, or containing `-`, are **intrinsic**: any attribute name is accepted, but every attribute *expression* is type-checked. Any other tag name is a **component**, resolved as a value (dotted names via member access) and checked as follows:
+
+- The component's **first parameter** is its props type. If it is an object type, attributes are checked against it: an unknown attribute is an error (UR2045), a missing required property is an error (UR2046), and each attribute's value must be assignable to the declared property type (UR2042, with contextual typing).
+- A bare attribute (`<Comp on/>`) has type `sach`. A `key` attribute is reserved by the runtime and never checked against props.
+- Element children satisfy a required `children` prop.
+- A `{...spread}` attribute makes the attribute set open-ended: unknown/missing checks are suppressed, while the types of explicitly named attributes are still checked.
+- If the props parameter is not an object type (e.g. `koi`), attributes are only checked as expressions.
 
 ## 4. Execution semantics
 
 UrLang compiles to JavaScript with no runtime library. Notable mappings: `bolo`→`console.log`, `==`→`===` (khaali→loose), `har x e mein` → `for...of` (`Object.keys(e)` for typed objects), `har i a se b tak` → inclusive `for` loop, function expressions → arrow functions (lexical `yeh`), `qisim`/type annotations erase. Programs with type errors do not emit code.
+
+JSX compiles to the **standard automatic runtime**: `<t a={x}>{y}</t>` → `_jsx(t, { a: x, children: y })` (`_jsxs` when there are 2+ children, with `children` as an array), a `key` attribute becomes the third argument, and `<>…</>` uses `_Fragment`. `_jsx`/`_jsxs`/`_Fragment` are imported from `<jsxImportSource>/jsx-runtime` (default `react`). Intrinsic tags emit as string literals, components as value references. JSX text is whitespace-cleaned as Babel does: leading/trailing indentation around newlines is removed, and lines are joined with a single space.
 
 ## 5. Stability
 

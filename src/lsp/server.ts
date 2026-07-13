@@ -55,7 +55,7 @@ function resolverFor(uri: string): ((specifier: string) => ModuleExports | null)
     if (cache.has(loaded.path)) return cache.get(loaded.path)!;
     cache.set(loaded.path, null); // cycle guard
     try {
-      const program = parse(loaded.source);
+      const program = parse(loaded.source, { jsx: loaded.path.endsWith(".urx") });
       const result = checkProgram(program, { resolveModule: (s) => resolve(s, loaded.path) });
       cache.set(loaded.path, result.exports);
       return result.exports;
@@ -81,7 +81,10 @@ function offsetOf(text: string, line: number, character: number): number {
 
 function refresh(uri: string, text: string): void {
   const resolveModule = resolverFor(uri);
-  const analysis = analyze(text, resolveModule ? { resolveModule } : {});
+  const analysis = analyze(text, {
+    ...(resolveModule ? { resolveModule } : {}),
+    jsx: uri.endsWith(".urx"),
+  });
   documents.set(uri, { text, analysis });
   send({
     method: "textDocument/publishDiagnostics",

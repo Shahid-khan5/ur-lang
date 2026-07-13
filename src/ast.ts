@@ -44,7 +44,9 @@ export type Expr =
   | NewExpr
   | ThisExpr
   | SuperCall
-  | SuperMember;
+  | SuperMember
+  | JsxElement
+  | JsxFragment;
 
 export interface NumberLiteral { kind: "NumberLiteral"; value: number; raw: string; span: Span }
 export interface StringLiteral { kind: "StringLiteral"; value: string; span: Span }
@@ -127,6 +129,37 @@ export interface SuperCall { kind: "SuperCall"; args: Expr[]; span: Span }
 
 /** `buzurg.method(...)` receiver → `super.method` (only in waris methods). */
 export interface SuperMember { kind: "SuperMember"; property: string; span: Span }
+
+// ---------- JSX (only parsed in .urx files) ----------
+
+/** `naam="x"` / `naam={expr}` / bare `naam` (value null → true). */
+export interface JsxAttribute { kind: "JsxAttribute"; name: string; value: Expr | null; span: Span }
+/** `{...props}` inside a tag. */
+export interface JsxSpreadAttribute { kind: "JsxSpreadAttribute"; argument: Expr; span: Span }
+export type JsxAttr = JsxAttribute | JsxSpreadAttribute;
+
+/** Raw text between tags; cleaned of indentation whitespace at codegen. */
+export interface JsxText { kind: "JsxText"; value: string; span: Span }
+/** `{expr}` child. */
+export interface JsxExprContainer { kind: "JsxExprContainer"; expr: Expr; span: Span }
+export type JsxChild = JsxText | JsxExprContainer | JsxElement | JsxFragment;
+
+/**
+ * `<div a="x">...</div>` — tagName may be dotted (`Foo.Bar`). Lowercase or
+ * dashed names are intrinsic (emitted as strings); capitalized names are
+ * component references resolved as values.
+ */
+export interface JsxElement {
+  kind: "JsxElement";
+  tagName: string;
+  attributes: JsxAttr[];
+  children: JsxChild[];
+  selfClosing: boolean;
+  span: Span;
+}
+
+/** `<>...</>` */
+export interface JsxFragment { kind: "JsxFragment"; children: JsxChild[]; span: Span }
 
 // ---------- Statements ----------
 

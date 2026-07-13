@@ -34,6 +34,10 @@ app.ur:3:1 — Arre yaar, 'x' ka type 'adad' hai, lekin value 'lafz' de rahe ho.
 | UR1026 | Malformed destructuring | `pakka { naam } = obj;` — the `=` source is required. |
 | UR1027 | Bad object key | Object keys are names or strings. |
 | UR1028 | Unknown statement | This isn't a recognizable UrLang statement. |
+| UR1029 | Unclosed JSX | Close every open tag: `<div>…</div>`, or self-close `<div/>`. |
+| UR1030 | Mismatched JSX closing tag | The closing tag's name must match the opening tag's. |
+| UR1031 | Bad JSX attribute | An attribute value is a string (`"…"`) or an expression (`{…}`). |
+| UR1032 | Unexpected character in JSX tag | Inside a tag: names, attributes, `=`, strings, `{expressions}`, and `/>`. |
 
 ## Type errors (UR2xxx)
 
@@ -82,5 +86,8 @@ app.ur:3:1 — Arre yaar, 'x' ka type 'adad' hai, lekin value 'lafz' de rahe ho.
 | UR2041 | Type arguments on non-generic | Only `Wada<T>` takes type arguments (for now). |
 | UR2042 | Property/argument type mismatch | Give the value the expected type. |
 | UR2043 | Constructor argument count | Match the `banao` signature. |
+| UR2044 | Not a component | A capitalized JSX tag must refer to a `kaam` (component). |
+| UR2045 | Unknown prop | That name isn't in the component's props type — check the spelling, or add it. |
+| UR2046 | Missing required prop | Pass every required prop (or make it optional: `key?: T`). |
 
 `UR0000` marks an uncatalogued diagnostic — if you see one, it's a bug in the catalog; please report it.

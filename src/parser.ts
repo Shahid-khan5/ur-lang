@@ -7,6 +7,10 @@ import type {
   Expr,
   FunctionDecl,
   IfStmt,
+  JsxAttr,
+  JsxChild,
+  JsxElement,
+  JsxFragment,
   Param,
   Program,
   Span,
@@ -16,15 +20,22 @@ import type {
 } from "./ast.js";
 
 
+export interface ParseOptions {
+  /** Enables JSX (used for .urx files). */
+  jsx?: boolean;
+}
+
 /** Recursive-descent parser. One token of lookahead, no backtracking. */
 class Parser {
   private readonly tokens: Token[];
   private i = 0;
+  private readonly jsx: boolean;
   /** One entry per function being parsed; flips to true when its body contains `intezar`. */
   private readonly asyncStack: boolean[] = [];
 
-  constructor(source: string) {
-    this.tokens = tokenize(source);
+  constructor(source: string, options?: ParseOptions) {
+    this.jsx = options?.jsx === true;
+    this.tokens = tokenize(source, undefined, { jsx: this.jsx });
   }
 
   parseProgram(): Program {
@@ -850,12 +861,122 @@ class Parser {
         }
         return { kind: "TemplateLiteral", quasis, expressions, span: this.span(t) };
       }
+      case TokenKind.Lt:
+        // The lexer only routes `<` here (instead of as a comparison) when it
+        // recognized a JSX start in a .urx file.
+        if (this.jsx) return this.jsxElement();
+        this.fail("Arre yaar, yahan expression hona chahiye tha, mila '<'.", t);
+        break;
       default:
         this.fail(`Arre yaar, yahan expression hona chahiye tha, mila '${t.value || "end of file"}'.`, t);
     }
   }
+
+  // ---------- JSX ----------
+
+  /** `<name attrs/>` | `<name attrs>children</name>` | `<>children</>` */
+  private jsxElement(): JsxElement | JsxFragment {
+    const lt = this.expect(TokenKind.Lt, "<");
+
+    if (this.match(TokenKind.Gt)) {
+      // Fragment: <>children</>
+      const children = this.jsxChildren();
+      const close = this.peek();
+      if (close.kind === TokenKind.JsxName) {
+        this.fail(`Arre yaar, JSX tag match nahi karte: '<>' khula tha, '</${close.value}>' se band kiya.`, close);
+      }
+      this.expect(TokenKind.Gt, ">");
+      return { kind: "JsxFragment", children, span: this.span(lt) };
+    }
+
+    const nameTok = this.expect(TokenKind.JsxName, "tag ka naam");
+    const attributes: JsxAttr[] = [];
+    for (;;) {
+      const t = this.peek();
+      if (t.kind === TokenKind.JsxName) {
+        this.next();
+        let value: Expr | null = null;
+        if (this.match(TokenKind.Assign)) {
+          const v = this.peek();
+          if (v.kind === TokenKind.String) {
+            this.next();
+            value = { kind: "StringLiteral", value: v.value, span: this.span(v) };
+          } else if (v.kind === TokenKind.LBrace) {
+            this.next();
+            value = this.expression();
+            this.expect(TokenKind.RBrace, "}");
+          } else {
+            this.fail("Arre yaar, JSX attribute ki value string ya {expression} honi chahiye.", v);
+          }
+        }
+        attributes.push({ kind: "JsxAttribute", name: t.value, value, span: this.span(t) });
+        continue;
+      }
+      if (t.kind === TokenKind.LBrace) {
+        // `{...props}` spread attribute.
+        this.next();
+        this.expect(TokenKind.DotDotDot, "...");
+        const argument = this.expression();
+        this.expect(TokenKind.RBrace, "}");
+        attributes.push({ kind: "JsxSpreadAttribute", argument, span: this.span(t) });
+        continue;
+      }
+      break;
+    }
+
+    if (this.match(TokenKind.Slash)) {
+      this.expect(TokenKind.Gt, ">");
+      return { kind: "JsxElement", tagName: nameTok.value, attributes, children: [], selfClosing: true, span: this.span(lt) };
+    }
+    this.expect(TokenKind.Gt, ">");
+    const children = this.jsxChildren();
+    const close = this.peek();
+    if (close.kind !== TokenKind.JsxName) {
+      this.fail(`Arre yaar, JSX tag match nahi karte: '<${nameTok.value}>' khula tha, '</>' se band kiya.`, close);
+    }
+    this.next();
+    if (close.value !== nameTok.value) {
+      this.fail(
+        `Arre yaar, JSX tag match nahi karte: '<${nameTok.value}>' khula tha, '</${close.value}>' se band kiya.`,
+        close,
+      );
+    }
+    this.expect(TokenKind.Gt, ">");
+    return { kind: "JsxElement", tagName: nameTok.value, attributes, children, selfClosing: false, span: this.span(lt) };
+  }
+
+  /** Parses children until the closing `</`, consuming the `<` and `/`. */
+  private jsxChildren(): JsxChild[] {
+    const children: JsxChild[] = [];
+    for (;;) {
+      const t = this.peek();
+      if (t.kind === TokenKind.JsxText) {
+        this.next();
+        children.push({ kind: "JsxText", value: t.value, span: this.span(t) });
+        continue;
+      }
+      if (t.kind === TokenKind.LBrace) {
+        this.next();
+        if (this.match(TokenKind.RBrace)) continue; // `{}` / `{/* tabsara */}` — dropped
+        const expr = this.expression();
+        this.expect(TokenKind.RBrace, "}");
+        children.push({ kind: "JsxExprContainer", expr, span: this.span(t) });
+        continue;
+      }
+      if (t.kind === TokenKind.Lt) {
+        if (this.tokens[this.i + 1]!.kind === TokenKind.Slash) {
+          this.next(); // <
+          this.next(); // /
+          return children;
+        }
+        children.push(this.jsxElement());
+        continue;
+      }
+      this.fail("Arre yaar, JSX element band karna bhool gaye — closing tag nahi mila.", t);
+    }
+  }
 }
 
-export function parse(source: string): Program {
-  return new Parser(source).parseProgram();
+export function parse(source: string, options?: ParseOptions): Program {
+  return new Parser(source, options).parseProgram();
 }

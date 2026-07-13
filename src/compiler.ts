@@ -13,6 +13,10 @@ export interface CompileOptions {
   rewriteUrImports?: boolean;
   /** Skip the type checker (not recommended; used by benchmarks to isolate stages). */
   typeCheck?: boolean;
+  /** Enable JSX. Defaults to true for .urx file names, false otherwise. */
+  jsx?: boolean;
+  /** Package whose `<pkg>/jsx-runtime` provides jsx/jsxs/Fragment. Default: "react". */
+  jsxImportSource?: string;
   /**
    * Loads an imported module's source so imports get their real exported
    * types. Return null for unresolvable specifiers (npm packages etc.) —
@@ -61,7 +65,7 @@ function makeModuleResolver(
     if (inProgress.has(loaded.path)) return null; // import cycle — degrade to koi
     inProgress.add(loaded.path);
     try {
-      const program = parse(loaded.source);
+      const program = parse(loaded.source, { jsx: loaded.path.endsWith(".urx") });
       const result = checkProgram(program, {
         resolveModule: (s) => resolveFrom(s, loaded.path),
       });
@@ -79,8 +83,9 @@ function makeModuleResolver(
 
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
   const fileName = options.fileName ?? "<urlang>";
+  const jsx = options.jsx ?? fileName.endsWith(".urx");
   try {
-    const program = parse(source);
+    const program = parse(source, { jsx });
     let exports: ModuleExports | null = null;
     if (options.typeCheck !== false) {
       const resolveModule =
@@ -97,11 +102,12 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
       exports = result.exports;
     }
     const mapBuilder = options.sourceMap
-      ? new SourceMapBuilder(fileName, source, fileName.replace(/\.ur$/, ".js"))
+      ? new SourceMapBuilder(fileName, source, fileName.replace(/\.urx?$/, ".js"))
       : null;
     const code = generate(program, {
       rewriteUrImports: options.rewriteUrImports ?? false,
       sourceMap: mapBuilder,
+      ...(options.jsxImportSource !== undefined ? { jsxImportSource: options.jsxImportSource } : {}),
     });
     return { code, map: mapBuilder ? mapBuilder.toJSON() : null, diagnostics: [], exports };
   } catch (e) {

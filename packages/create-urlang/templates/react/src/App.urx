@@ -1,0 +1,17 @@
+// React component likha UrLang mein — .urx files JSX support karti hain,
+// aur props TypeScript ki tarah check hote hain.
+lao { useState } "react" se;
+
+lao { Ginti } "./Ginti.urx" se;
+
+qisim AppProps = { naam: lafz };
+
+bhejo asal kaam App(props: AppProps): koi {
+  wapas (
+    <div className="app">
+      <h1>Salaam, {props.naam}!</h1>
+      <p>UrLang + React — types ke saath.</p>
+      <Ginti shuru={0}/>
+    </div>
+  );
+}

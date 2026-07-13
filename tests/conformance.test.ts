@@ -1,6 +1,8 @@
 // Conformance suite: data-driven fixtures under tests/conformance/, separate
 // from unit tests. `run/*.ur` must compile clean and print `*.expected`;
-// `errors/*.ur` must produce exactly the codes in `*.codes` (in order).
+// `errors/*.ur[x]` must produce exactly the codes in `*.codes` (in order).
+// (`run` fixtures execute via `new Function`, so they cannot import — JSX
+// execution is proven against real React in tests/jsx-react*.test.ts.)
 import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -12,11 +14,11 @@ function fixtures(dir: string, dataExt: string): [string, string, string][] {
   const full = path.join(root, dir);
   return fs
     .readdirSync(full)
-    .filter((f) => f.endsWith(".ur"))
+    .filter((f) => f.endsWith(".ur") || f.endsWith(".urx"))
     .map((f) => [
       f,
       fs.readFileSync(path.join(full, f), "utf8"),
-      fs.readFileSync(path.join(full, f.replace(/\.ur$/, dataExt)), "utf8"),
+      fs.readFileSync(path.join(full, f.replace(/\.urx?$/, dataExt)), "utf8"),
     ]);
 }
 

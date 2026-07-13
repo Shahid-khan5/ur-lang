@@ -36,6 +36,10 @@ export const DIAGNOSTIC_CATALOG: DiagnosticEntry[] = [
   { code: "UR1026", match: /destructuring mein '='/, title: "Malformed destructuring", help: "pakka { naam } = obj; — '=' ke saath source do." },
   { code: "UR1027", match: /object ki key naam ya string/, title: "Bad object key", help: "Object keys naam ya string hote hain." },
   { code: "UR1028", match: /statement samajh nahi aayi/, title: "Unknown statement", help: "Yeh UrLang ki koi statement nahi bani." },
+  { code: "UR1029", match: /JSX (tag|element) band karna bhool gaye/, title: "Unclosed JSX", help: "Har khula tag band karo: <div>...</div> ya self-close <div/>." },
+  { code: "UR1030", match: /JSX tag match nahi karte/, title: "Mismatched JSX closing tag", help: "Closing tag ka naam opening tag jaisa hona chahiye." },
+  { code: "UR1031", match: /JSX attribute ki (value|string)/, title: "Bad JSX attribute", help: 'Attribute value string ("...") ya expression ({...}) hoti hai.' },
+  { code: "UR1032", match: /JSX tag ke andar yeh samajh nahi aaya/, title: "Unexpected character in JSX tag", help: "Tag ke andar sirf naam, attributes, '=', strings, {expressions} aur '/>' aate hain." },
 
   // ---- UR2xxx: types + semantics ----
   { code: "UR2001", match: /ka type '.*' hai, lekin value/, title: "Initializer type mismatch", help: "Annotation aur value ka type ek hona chahiye." },
@@ -81,6 +85,9 @@ export const DIAGNOSTIC_CATALOG: DiagnosticEntry[] = [
   { code: "UR2041", match: /type arguments nahi leta/, title: "Type arguments on non-generic", help: "Sirf Wada<T> type arguments leta hai (abhi)." },
   { code: "UR2042", match: /ka type '.*' hona chahiye, '.*' nahi/, title: "Property/argument type mismatch", help: "Value ko expected type ke mutabiq do." },
   { code: "UR2043", match: /banao ko .* argument chahiye/, title: "Constructor argument count", help: "banao ki signature ke mutabiq arguments do." },
+  { code: "UR2044", match: /component nahi hai — yeh/, title: "Not a component", help: "Capitalized JSX tag ek kaam (component) ko refer kare." },
+  { code: "UR2045", match: /naam ka koi prop nahi hai/, title: "Unknown prop", help: "Component ke props type mein yeh naam nahi — spelling dekho ya props type update karo." },
+  { code: "UR2046", match: /prop dena zaroori hai/, title: "Missing required prop", help: "Component ke props ki har required key do (ya usay optional banao: key?: T)." },
 ];
 
 /** Resolves a diagnostic code for a message; UR0000 if uncatalogued. */

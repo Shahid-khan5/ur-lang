@@ -128,6 +128,36 @@ describe("typed npm imports in compile()", () => {
     const ok = compileApp('lao { kuchBhi } "bilkul-ghaib-pkg" se;\nkuchBhi(1, 2, 3);');
     expect(ok.diagnostics.map((d) => d.message)).toEqual([]);
   });
+
+  it("never claims a missing export for a name our .d.ts subset couldn't read", () => {
+    // mera-pkg's .d.ts declares dugna/NAAM/Cheez. A name we didn't capture must
+    // degrade to koi — reporting "no such export" for a real export is far worse
+    // than missing its type. (Real case: React's useState, behind `export =`.)
+    const ok = compileApp('lao { dugna, kuchAurBhi } "mera-pkg" se;\nbolo dugna(2), kuchAurBhi(1, "x");');
+    expect(ok.diagnostics.map((d) => d.message)).toEqual([]);
+    // The names it *did* read stay strictly typed:
+    const bad = compileApp('lao { dugna } "mera-pkg" se;\nbolo dugna("lafz");');
+    expect(bad.diagnostics.length).toBeGreaterThan(0);
+  });
+});
+
+describe("against the real react package (@types/react installed)", () => {
+  const importerPath = path.resolve(import.meta.dirname, "..", "src", "x.urx");
+
+  it("imports hooks from react without false 'no such export' errors", () => {
+    // @types/react is a namespace + `export =` — our reader captures only part
+    // of it. Hooks must still import cleanly (typed koi at worst).
+    const result = compile(
+      'lao { useState, useEffect, useMemo } "react" se;\n' +
+        "bhejo kaam App(): koi {\n" +
+        "  pakka [n, setN] = useState(0);\n" +
+        "  wapas <button onClick={kaam () { setN(n + 1); }}>{n}</button>;\n" +
+        "}",
+      { fileName: importerPath, loadModule: fsModuleLoader, resolveTypes: makeNpmTypesResolver() }
+    );
+    expect(result.diagnostics.map((d) => d.message)).toEqual([]);
+    expect(result.code).toContain("react/jsx-runtime");
+  });
 });
 
 describe("against the real @tauri-apps/api package", () => {

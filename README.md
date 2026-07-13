@@ -1,6 +1,6 @@
 # UrLang
 
-An Urdu-flavored, **statically typed** programming language that compiles to JavaScript — built like TypeScript: structural types, inference, narrowing, generics, classes, modules, an LSP, and full interop with the JS ecosystem. Written in strict TypeScript with a **zero-dependency compiler core**, tested end-to-end against real Vite, Tauri, and Electron projects.
+An Urdu-flavored, **statically typed** programming language that compiles to JavaScript — built like TypeScript: structural types, inference, narrowing, generics, classes, modules, **JSX/React**, an LSP, and full interop with the JS ecosystem. Written in strict TypeScript with a **zero-dependency compiler core**, tested end-to-end against real Vite, React, Tauri, and Electron projects.
 
 Because UrLang transpiles to plain JavaScript (with source maps), it runs everywhere JS runs: **Node, browsers, Electron, Tauri**, Deno — anything.
 
@@ -36,7 +36,7 @@ npx tsx src/cli.ts lsp                          # language server (stdio)
 After `npm link`, all of the above are just `urlang <command>`. New project:
 
 ```sh
-npm create urlang my-app -- --template vite     # or: tauri | electron
+npm create urlang my-app -- --template vite     # or: react | tauri | tauri-react | electron
 ```
 
 ## The language in 60 seconds
@@ -55,6 +55,7 @@ npm create urlang my-app -- --template vite     # or: tauri | electron
 | Errors | `koshish / pakro / akhir / phenko` | `try / catch / finally / throw` |
 | Classes | `jamaat / banao / yeh / naya / waris / buzurg` | `class / constructor / this / new / extends / super` |
 | Modules | `bhejo` (+ `asal`, re-exports), `lao { } / asal / sab … se` | `export` (+ default), `import { } / default / * as` |
+| JSX | `.urx` files: `<div a={x}>{y}</div>`, `<Comp/>`, `<>…</>` | `.tsx` files |
 | Interop | `bahar fetch;`, `.d.ts` consumption, typed npm imports | ambient declarations |
 
 Full grammar and typing rules: **[SPEC.md](SPEC.md)**. Design rationale: **[docs/DESIGN.md](docs/DESIGN.md)**. Every diagnostic has a stable code: **[docs/errors.md](docs/errors.md)**.
@@ -69,6 +70,36 @@ Full grammar and typing rules: **[SPEC.md](SPEC.md)**. Design rationale: **[docs
 - **Cross-module checking**: `lao { jama } "./math.ur" se;` gives `jama` its real exported signature — a bad call in one file is caught when the *importer* compiles.
 - **Classes** compile to native ES classes; instances flow structurally through the type system; `yeh`, constructors, and `buzurg` calls are fully checked.
 - **No emit on type errors**, `==` compiles to `===` (khaali comparisons compile loose to absorb null/undefined), conditions must be `bool` — no truthiness bugs.
+
+## React, in UrLang
+
+Write React components in `.urx` files — JSX with Urdu keywords, **and props are type-checked exactly like TSX**:
+
+```sh
+npm create urlang my-app -- --template react     # or tauri-react
+```
+
+```
+// src/Ginti.urx
+lao { useState } "react" se;
+
+qisim GintiProps = { shuru: adad };
+
+bhejo kaam Ginti(props: GintiProps): koi {
+  pakka [ginti, setGinti] = useState(props.shuru);
+  wapas (
+    <button onClick={kaam () { setGinti(ginti + 1); }}>
+      Ginti: {ginti}
+    </button>
+  );
+}
+```
+
+`<Ginti/>` is a missing-prop error, `<Ginti shuru="ek"/>` is a type error, `<Ginti shuru={0} faltu={1}/>` is an unknown-prop error — all at compile time. Everything you'd expect works: fragments, `{...spread}`, `key`, optional props, nested components, and `.urx` importing `.ur` (and vice versa) with full types across the boundary.
+
+Under the hood it emits the **standard automatic JSX runtime** (`_jsx`/`_jsxs` from `react/jsx-runtime`) — the same protocol TSX emits, so there's no custom runtime and no Babel. Point it elsewhere with `jsxImportSource` (`urlang({ jsxImportSource: "preact" })`); React Compiler composes on top, as it does with TSX.
+
+For **Svelte or Vue**, the pattern is the one TypeScript users already know: components stay `.svelte`/`.vue`, and your typed logic lives in `.ur` modules they import.
 
 ## Use with Vite, Tauri, Electron
 
@@ -110,7 +141,7 @@ src/            compiler: lexer → parser → checker → codegen (+ sourcemaps
 tests/          unit + integration tests; tests/conformance/ = spec conformance suite
 examples/       language tour and runnable samples
 demo/           real Vite app (built + DOM-tested in CI)
-packages/create-urlang/   project scaffolder (vite | tauri | electron)
+packages/create-urlang/   project scaffolder (vite | react | tauri | tauri-react | electron)
 editors/vscode-urlang/    VS Code extension (grammar + LSP client)
 playground/     in-browser compile+run
 SPEC.md         language specification   docs/errors.md   diagnostic codes

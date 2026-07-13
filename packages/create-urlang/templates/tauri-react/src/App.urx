@@ -1,0 +1,21 @@
+// React frontend + Rust backend — dono ke beech typed bridge.
+// `greet` ka type commands.ur se aata hai, jo @tauri-apps/api ke .d.ts se.
+lao { useState } "react" se;
+
+lao { greet } "./commands.ur" se;
+
+bhejo asal kaam App(): koi {
+  pakka [jawab, setJawab] = useState("");
+
+  pakka poochho = kaam () {
+    greet("duniya").then(kaam (paigham: lafz) { setJawab(paigham); });
+  };
+
+  wapas (
+    <div className="app">
+      <h1>UrLang + React + Tauri</h1>
+      <button onClick={poochho}>Rust se poochho</button>
+      <p>{jawab}</p>
+    </div>
+  );
+}

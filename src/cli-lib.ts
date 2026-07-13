@@ -8,9 +8,9 @@ import { parse } from "./parser.js";
 import { UrError } from "./errors.js";
 import type { ModuleExports } from "./checker.js";
 
-/** Loads relative .ur imports from disk so the checker sees real exported types. */
+/** Loads relative .ur/.urx imports from disk so the checker sees real exported types. */
 export const fsModuleLoader: NonNullable<CompileOptions["loadModule"]> = (specifier, importerPath) => {
-  if (!specifier.startsWith(".") || !specifier.endsWith(".ur")) return null;
+  if (!specifier.startsWith(".") || !(specifier.endsWith(".ur") || specifier.endsWith(".urx"))) return null;
   const resolved = path.resolve(path.dirname(importerPath), specifier);
   try {
     return { source: fs.readFileSync(resolved, "utf8"), path: resolved };
@@ -60,7 +60,7 @@ export function buildFile(inputPath: string, options: BuildOptions): BuildFileRe
     return { inputPath, outputPath: null, diagnostics: result.diagnostics, source };
   }
   fs.mkdirSync(options.outDir, { recursive: true });
-  const outName = fileName.replace(/\.ur$/, ".js");
+  const outName = fileName.replace(/\.urx?$/, ".js");
   const outputPath = path.join(options.outDir, outName);
   let code = result.code;
   if (sourceMap && result.map !== null) {
@@ -69,7 +69,7 @@ export function buildFile(inputPath: string, options: BuildOptions): BuildFileRe
   }
   fs.writeFileSync(outputPath, code);
   if (options.declarations !== false && result.exports !== null) {
-    fs.writeFileSync(path.join(options.outDir, fileName.replace(/\.ur$/, ".d.ts")), emitDts(result.exports));
+    fs.writeFileSync(path.join(options.outDir, fileName.replace(/\.urx?$/, ".d.ts")), emitDts(result.exports));
   }
   return { inputPath, outputPath, diagnostics: [], source };
 }
@@ -89,7 +89,7 @@ export function buildGraph(entryPath: string, options: BuildOptions): BuildFileR
     const result = buildFile(file, options);
     results.push(result);
     if (result.diagnostics.length > 0) continue;
-    for (const dep of urImportsOf(result.source)) {
+    for (const dep of urImportsOf(result.source, file.endsWith(".urx"))) {
       if (dep.startsWith(".")) {
         queue.push(path.resolve(path.dirname(file), dep));
       }
@@ -98,13 +98,13 @@ export function buildGraph(entryPath: string, options: BuildOptions): BuildFileR
   return results;
 }
 
-/** Extracts the `.ur` import specifiers from a source file. */
-function urImportsOf(source: string): string[] {
+/** Extracts the `.ur`/`.urx` import specifiers from a source file. */
+function urImportsOf(source: string, jsx: boolean): string[] {
   try {
-    const program = parse(source);
+    const program = parse(source, { jsx });
     const deps: string[] = [];
     for (const stmt of program.body) {
-      if (stmt.kind === "ImportStmt" && stmt.source.endsWith(".ur")) {
+      if (stmt.kind === "ImportStmt" && (stmt.source.endsWith(".ur") || stmt.source.endsWith(".urx"))) {
         deps.push(stmt.source);
       }
     }

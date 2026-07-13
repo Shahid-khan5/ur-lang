@@ -43,6 +43,11 @@ export enum TokenKind {
   Yeh, // this
   Waris, // extends
   Buzurg, // super
+  // JSX (only produced when the lexer runs in jsx mode, i.e. .urx files):
+  // JsxName covers tag and attribute names (allows `-` and `.`);
+  // JsxText is a raw text chunk between tags.
+  JsxName,
+  JsxText,
   // Template literals: `a${ x }b${ y }c` lexes as
   // TemplateStart("a") x TemplateMiddle("b") y TemplateEnd("c");
   // a template with no ${} lexes as a single TemplateFull.

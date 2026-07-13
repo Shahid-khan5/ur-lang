@@ -99,7 +99,10 @@ export function resolveNpmTypes(specifier: string, importerPath: string): Module
   if (typesFile === null) return null;
 
   try {
-    return loadDtsExports(fs.readFileSync(typesFile, "utf8"));
+    // Marked partial: our .d.ts reader understands a subset of TypeScript, so
+    // a name we didn't capture (React's `useState` lives behind `export =` and
+    // a namespace, for instance) must degrade to koi — never to "no such export".
+    return { ...loadDtsExports(fs.readFileSync(typesFile, "utf8")), partial: true };
   } catch {
     return null;
   }

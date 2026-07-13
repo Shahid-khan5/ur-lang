@@ -1,0 +1,13 @@
+// Ek chhota counter component — useState, events, sab kuch.
+lao { useState } "react" se;
+
+qisim GintiProps = { shuru: adad };
+
+bhejo kaam Ginti(props: GintiProps): koi {
+  pakka [ginti, setGinti] = useState(props.shuru);
+  wapas (
+    <button onClick={kaam () { setGinti(ginti + 1); }}>
+      Ginti: {ginti}
+    </button>
+  );
+}
