@@ -3,6 +3,7 @@
 import type {
   BlockStmt,
   ClassDecl,
+  EnumDecl,
   Expr,
   FunctionDecl,
   FunctionExpr,
@@ -168,11 +169,71 @@ export class Checker extends ExpressionChecker {
 
   /** The return type `wapas` statements check against inside the body. */
 
+  /**
+   * `fehrist Rang { Laal, Hara }` becomes two things: a **value** (a frozen
+   * object of the members) and a **type** (the union of their literal types),
+   * so `pakka r: Rang = Rang.Laal;` checks and `= 5` does not.
+   */
+  private declareEnum(decl: EnumDecl, scope: Scope): void {
+    const props = new Map<string, PropInfo>();
+    const memberTypes: Type[] = [];
+    let next = 0;
+    for (const m of decl.members) {
+      let value: string | number;
+      if (m.value === null) {
+        value = next++;
+      } else if (m.value.kind === "NumberLiteral") {
+        value = m.value.value;
+        next = m.value.value + 1;
+      } else if (m.value.kind === "StringLiteral") {
+        value = m.value.value;
+      } else {
+        this.error("Arre yaar, fehrist ki value adad ya lafz literal honi chahiye.", m.span);
+        value = next++;
+      }
+      const t = literal(value);
+      props.set(m.name, { type: t, optional: false });
+      memberTypes.push(t);
+    }
+    const valueType: Type = { kind: "object", props };
+    if (!this.declareValue(decl.name, valueType, false, decl.span)) {
+      this.error(`Arre yaar, '${decl.name}' pehle se declared hai isi scope mein.`, decl.span);
+      return;
+    }
+    const type = memberTypes.length === 0 ? KUCHNAHI : union(memberTypes);
+    if (!scope.declareType(decl.name, type)) {
+      this.error(`Arre yaar, qisim '${decl.name}' pehle se defined hai.`, decl.span);
+    }
+    if (decl.exported && scope.parent === null) {
+      this.exports.values.set(decl.name, valueType);
+      this.exports.types.set(decl.name, type);
+    }
+  }
+
   protected hoistDeclarations(body: Stmt[], scope: Scope): void {
     const outer = this.scope;
     this.scope = scope;
     for (const stmt of body) {
+      if (stmt.kind === "EnumDecl") {
+        this.declareEnum(stmt, scope);
+        continue;
+      }
       if (stmt.kind === "TypeAliasDecl") {
+        if (stmt.typeParams.length > 0) {
+          // `qisim Jorra<T> = …` — resolved with T as a type parameter, then
+          // substituted at every use site (`Jorra<adad>`).
+          const aliasScope = new Scope(this.scope);
+          this.scope = aliasScope;
+          for (const tp of stmt.typeParams) aliasScope.declareType(tp, typeParam(tp));
+          const resolved = this.resolveType(stmt.type);
+          this.scope = scope;
+          if (this.genericAliases.has(stmt.name) || scope.lookupType(stmt.name) !== null) {
+            this.error(`Arre yaar, qisim '${stmt.name}' pehle se defined hai.`, stmt.span);
+            continue;
+          }
+          this.genericAliases.set(stmt.name, { typeParams: stmt.typeParams, type: resolved });
+          continue;
+        }
         const resolved = this.resolveType(stmt.type);
         if (!scope.declareType(stmt.name, resolved)) {
           this.error(`Arre yaar, qisim '${stmt.name}' pehle se defined hai.`, stmt.span);
@@ -454,7 +515,8 @@ export class Checker extends ExpressionChecker {
         return;
       }
       case "TypeAliasDecl":
-        // Handled during hoisting.
+      case "EnumDecl":
+        // Both are handled during hoisting.
         return;
       case "DestructureDecl": {
         const initType = this.expr(stmt.init);

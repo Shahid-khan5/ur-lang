@@ -393,6 +393,26 @@ class Codegen {
         this.newline();
         return;
       }
+      case "EnumDecl": {
+        // A frozen object: the members exist at runtime, the type does not.
+        this.indent();
+        this.mark(stmt.span);
+        this.write(`${stmt.exported ? "export " : ""}const ${stmt.name} = Object.freeze({ `);
+        let next = 0;
+        stmt.members.forEach((m, i) => {
+          if (i > 0) this.write(", ");
+          this.write(`${m.name}: `);
+          if (m.value === null) {
+            this.write(String(next++));
+          } else {
+            if (m.value.kind === "NumberLiteral") next = m.value.value + 1;
+            this.expr(m.value, 0);
+          }
+        });
+        this.write(" });");
+        this.newline();
+        return;
+      }
       case "ExternDecl":
       case "TypeAliasDecl":
         // Purely checker-level declarations; nothing to emit (types are erased).
@@ -669,6 +689,11 @@ class Codegen {
       }
       case "RegexLiteral":
         this.write(e.raw);
+        return;
+      case "CastExpr":
+      case "NonNullExpr":
+        // Both are compile-time only — emit the operand and nothing else.
+        this.expr(e.expr, parentPrecedence);
         return;
       case "Binary":
       case "Logical": {

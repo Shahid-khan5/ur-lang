@@ -326,6 +326,26 @@ export abstract class ExpressionChecker extends CheckerBase {
         return BOOL;
       case "RegexLiteral":
         return KOI; // a RegExp; its methods stay koi
+      case "CastExpr": {
+        // `x jaisa T` — allowed when the two types overlap in either direction
+        // (exactly TS's rule for `as`). Unrelated types are a mistake, not an
+        // escape hatch: go through koi if that is really what you mean.
+        const from = this.expr(expr.expr);
+        const to = this.resolveType(expr.type);
+        if (!assignable(to, from) && !assignable(from, to)) {
+          this.error(
+            `Arre yaar, '${typeName(from)}' ko '${typeName(to)}' jaisa nahi bana sakte — inka koi taalluq nahi.`,
+            expr.span
+          );
+        }
+        return to;
+      }
+      case "NonNullExpr": {
+        // `x!` — the value is asserted present, so khaali drops out.
+        const t = this.expr(expr.expr);
+        if (t.kind === "khaali" || t.kind === "kuchnahi") return KOI;
+        return this.narrowExclude(t, KHAALI);
+      }
       case "Binary": {
         const left = this.expr(expr.left);
         const right = this.expr(expr.right);

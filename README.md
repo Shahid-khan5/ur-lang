@@ -58,14 +58,18 @@ npm create urlang my-app -- --template react
 | Types | `adad lafz bool koi khaali kuchnahi`, `T[]`, `A \| B`, `{ k?: T }`, `"literal"`, `Wada<T>` | `number string boolean any null/undefined void`, arrays, unions, objects, literals, `Promise<T>` |
 | Aliases | `qisim Shakhs = { naam: lafz };` | `type Shakhs = { naam: string };` |
 | Print | `bolo a, b;` | `console.log(a, b)` |
-| Branches | `agar (…) / warna agar / warna`, ternary `? :` | `if / else if / else` |
-| Loops | `jab tak (…)`, `har x list mein`, `har i 1 se 10 tak`, `bas`, `agla` | `while`, `for…of`, `for`, `break`, `continue` |
-| Nullish | `naam ?? "mehmaan"`, `x?.y` | `??`, `?.` |
+| Branches | `agar (…) / warna agar / warna`, ternary `? :`, `chuno / surat / warna` | `if / else if / else`, `switch / case / default` |
+| Loops | `jab tak (…)`, `karo { } jab tak (…)`, `har x list mein`, `har i 1 se 10 tak`, `har (rakho i = 0; i < n; i++)`, `bas`, `agla` (labels too) | `while`, `do…while`, `for…of`, `for`, `break`, `continue` |
+| Operators | `+ - * / % **`, `& \| ^ ~ << >> >>>`, `++ --`, `noeyat`, `hai`, `andar`, `mitao` | arithmetic, bitwise, increment, `typeof`, `instanceof`, `in`, `delete` |
+| Nullish | `naam ?? "mehmaan"`, `x?.y`, `x?.()`, `x?.[0]`, `x!` | `??`, `?.`, `?.()`, `?.[]`, `!` |
+| Destructuring | `pakka { naam: shakhs, umar = 0, ...baqi } = s;`, `[a, b = 1, ...rest]`, in parameters too | the same |
+| Enums | `fehrist Rang { Laal, Hara }` | `enum` |
+| Casts | `v jaisa adad` | `v as number` |
 | Functions | `kaam f<T>(x: T[], y?: adad, z: adad = 1, ...r: adad[]): T` | generics, optional/default/rest params |
 | Lambdas | `kaam (n: adad): adad { wapas n * 2; }` | arrow functions (lexical `yeh`) |
 | Async | `intezar` (auto-`async`) | `await` / `async` |
 | Errors | `koshish / pakro / akhir / phenko` | `try / catch / finally / throw` |
-| Classes | `jamaat / banao / yeh / naya / waris / buzurg` | `class / constructor / this / new / extends / super` |
+| Classes | `jamaat<T> / banao / yeh / naya / waris / buzurg`, `sakit`, `nijee`, `hasil`, `lagao` | `class / constructor / this / new / extends / super`, `static`, `private`, `get`, `set` |
 | Modules | `bhejo` (+ `asal`, re-exports), `lao { } / asal / sab … se` | `export` (+ default), `import { } / default / * as` |
 | JSX | `.urx` files: `<div a={x}>{y}</div>`, `<Comp/>`, `<>…</>` | `.tsx` files |
 | Interop | `bahar fetch;`, `.d.ts` consumption, typed npm imports | ambient declarations |

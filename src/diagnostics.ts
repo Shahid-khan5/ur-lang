@@ -37,6 +37,12 @@ export const DIAGNOSTIC_CATALOG: DiagnosticEntry[] = [
   { code: "UR1027", match: /object ki key naam ya string/, title: "Bad object key", help: "Object keys naam ya string hote hain." },
   { code: "UR1028", match: /statement samajh nahi aayi/, title: "Unknown statement", help: "Yeh UrLang ki koi statement nahi bani." },
   { code: "UR1029", match: /JSX (tag|element) band karna bhool gaye/, title: "Unclosed JSX", help: "Har khula tag band karo: <div>...</div> ya self-close <div/>." },
+  { code: "UR1033", match: /regex band karna bhool gaye/, title: "Unterminated regex", help: "Regex ko closing '/' se band karo: /ab+c/gi" },
+  { code: "UR1034", match: /'chuno' (band karna bhool gaye|mein ek hi 'warna'|ke andar 'surat')/, title: "Malformed chuno", help: "chuno (x) { surat 1: ... bas; warna: ... }" },
+  { code: "UR1035", match: /'karo \{ \.\.\. \}' ke baad/, title: "Malformed karo", help: "karo { ... } jab tak (shart);" },
+  { code: "UR1036", match: /'\.\.\.' wala naam aakhri/, title: "Rest binding not last", help: "Destructuring mein '...' wala naam aakhri hota hai." },
+  { code: "UR1037", match: /'hasil'\/'lagao' method hote hain/, title: "Accessor needs parentheses", help: "hasil naam(): T { ... } / lagao naam(v: T) { ... }" },
+  { code: "UR1038", match: /'mitao' sirf property ya index/, title: "Bad mitao target", help: "mitao o.a; ya mitao o[k];" },
   { code: "UR1030", match: /JSX tag match nahi karte/, title: "Mismatched JSX closing tag", help: "Closing tag ka naam opening tag jaisa hona chahiye." },
   { code: "UR1031", match: /JSX attribute ki (value|string)/, title: "Bad JSX attribute", help: 'Attribute value string ("...") ya expression ({...}) hoti hai.' },
   { code: "UR1032", match: /JSX tag ke andar yeh samajh nahi aaya/, title: "Unexpected character in JSX tag", help: "Tag ke andar sirf naam, attributes, '=', strings, {expressions} aur '/>' aate hain." },
@@ -88,6 +94,15 @@ export const DIAGNOSTIC_CATALOG: DiagnosticEntry[] = [
   { code: "UR2044", match: /component nahi hai — yeh/, title: "Not a component", help: "Capitalized JSX tag ek kaam (component) ko refer kare." },
   { code: "UR2045", match: /naam ka koi prop nahi hai/, title: "Unknown prop", help: "Component ke props type mein yeh naam nahi — spelling dekho ya props type update karo." },
   { code: "UR2046", match: /prop dena zaroori hai/, title: "Missing required prop", help: "Component ke props ki har required key do (ya usay optional banao: key?: T)." },
+  { code: "UR2047", match: /naam ka koi method nahi hai/, title: "Unknown method", help: "Is type pe aisa koi built-in method nahi — spelling dekho (ya koi use karo)." },
+  { code: "UR2048", match: /'hai' ke daayen taraf jamaat|'andar' ke (baayen|daayen) taraf/, title: "Bad hai/andar operand", help: "x hai Jamaat; \"key\" andar object." },
+  { code: "UR2049", match: /naam ka koi sakit member nahi hai/, title: "Unknown static member", help: "Jamaat pe sirf 'sakit' members class ke zariye milte hain." },
+  { code: "UR2050", match: /nijee hai — jamaat/, title: "Private member", help: "'nijee' member sirf apni jamaat ke andar chalta hai." },
+  { code: "UR2051", match: /type argument chahiye/, title: "Wrong type argument count", help: "Generic ko utne hi type arguments do jitne declare kiye hain." },
+  { code: "UR2052", match: /jaisa nahi bana sakte/, title: "Impossible cast", help: "'jaisa' un types ke beech chalta hai jinka overlap ho; warna 'koi' se guzro." },
+  { code: "UR2053", match: /fehrist ki value adad ya lafz/, title: "Bad enum value", help: "fehrist ki value adad ya lafz literal honi chahiye." },
+  { code: "UR2054", match: /computed key lafz ya adad/, title: "Bad computed key", help: "{ [k]: v } mein k lafz ya adad ho." },
+  { code: "UR2055", match: /naam ka koi label nahi hai/, title: "Unknown label", help: "'bas naam;' / 'agla naam;' ke liye pehle 'naam:' se loop label karo." },
 ];
 
 /** Resolves a diagnostic code for a message; UR0000 if uncatalogued. */

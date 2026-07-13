@@ -12,6 +12,70 @@ UrLang versions the **language** and the **toolchain** together:
 
 Covered by semver: everything in `SPEC.md`, `docs/errors.md` codes, CLI commands, the three package exports, and the shape of `compile()`'s options/result. **Not covered:** compiler internals (direct imports from `dist/` paths other than the documented exports), generated-JS formatting, and the exact text of error messages.
 
+## [1.4.0] — 2026-07-13
+
+Closes every gap between UrLang and JS/TS that a survey of the language surface
+turned up. A probe of 35 constructs that previously failed to compile now passes
+all 35.
+
+### Added — operators
+
+- `++` / `--` (prefix and postfix), `**` (right-associative).
+- The bitwise family — `&` `|` `^` `~` `<<` `>>` `>>>` — with compound
+  assignments (`&=`, `<<=`, …). The whole precedence table now mirrors JS.
+- Keyword operators: **`noeyat`** (typeof), **`hai`** (instanceof),
+  **`andar`** (in), **`mitao`** (delete).
+- **Regex literals** (`/ab+c/gi`). Division and regex are told apart by operand
+  position, the same rule JS lexers use.
+- Optional call `?.()` and optional index `?.[]`, both typed (the result gains
+  `khaali`).
+
+### Added — statements
+
+- **`chuno` / `surat`** (switch/case) with JS fallthrough, `warna` as default,
+  case-type checking, and discriminant narrowing per case.
+- **`karo { … } jab tak (…)`** — do-while.
+- **C-style `har (rakho i = 0; i < n; i++)`**, told apart from the other `har`
+  forms by the parenthesis; the loop variable is scoped to the loop.
+- **Labelled loops**: `bahar_wala: har … { bas bahar_wala; }`.
+
+### Added — destructuring
+
+- Renaming `{ naam: shakhs }`, defaults `{ n = 7 }`, rest `{ a, ...baqi }`,
+  array forms `[a, b = 9, ...baqi]`, and arbitrary nesting — all fully typed
+  (a default drops `khaali`; a rest binding keeps exactly the properties nobody
+  else claimed).
+- **Destructured parameters**: `kaam salaam({ naam, umar }: Shakhs)`.
+- **Computed keys** `{ [k]: v }`.
+
+### Added — classes
+
+- **`sakit`** (static), **`hasil`/`lagao`** (getter/setter), **`nijee`**
+  (private), and **generic classes** (`jamaat Dabba<T>`, with the type argument
+  given or inferred from the constructor).
+- `nijee` members carry their owning class in the type, so they work inside the
+  class, are rejected outside it, and cannot be satisfied by a plain object type
+  that merely declares the same field name.
+
+### Added — types
+
+- **`fehrist`** (enum): a frozen object at runtime, a union of literal types at
+  compile time — so `pakka r: Rang = 5;` is an error.
+- **`jaisa`** (TypeScript's `as`) and the **non-null assertion `!`**; both erase
+  at runtime.
+- **Generic type aliases**: `qisim Jorra<T> = { pehla: T, doosra: T };`.
+
+### Fixed
+
+- Contextual typing now tries each member of a union, so a discriminated-union
+  literal checks against the matching arm instead of widening its discriminant
+  and failing.
+
+### Still deliberately absent
+
+Generators (`kaam*`/`yield`), decorators, mapped and conditional types, and
+`var`. `interface` is not needed — `qisim` covers it structurally.
+
 ## [1.3.0] — 2026-07-13
 
 A consistency pass over the language surface: places where a construct behaved

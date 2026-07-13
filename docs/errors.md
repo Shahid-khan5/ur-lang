@@ -38,6 +38,12 @@ app.ur:3:1 — Arre yaar, 'x' ka type 'adad' hai, lekin value 'lafz' de rahe ho.
 | UR1030 | Mismatched JSX closing tag | The closing tag's name must match the opening tag's. |
 | UR1031 | Bad JSX attribute | An attribute value is a string (`"…"`) or an expression (`{…}`). |
 | UR1032 | Unexpected character in JSX tag | Inside a tag: names, attributes, `=`, strings, `{expressions}`, and `/>`. |
+| UR1033 | Unterminated regex | Close it with `/`: `/ab+c/gi`. |
+| UR1034 | Malformed `chuno` | `chuno (x) { surat 1: … bas; warna: … }` — one `warna` at most. |
+| UR1035 | Malformed `karo` | `karo { … } jab tak (shart);` |
+| UR1036 | Rest binding not last | `...baqi` comes last in a pattern. |
+| UR1037 | Accessor needs parentheses | `hasil naam(): T { … }` / `lagao naam(v: T) { … }` |
+| UR1038 | Bad `mitao` target | `mitao o.a;` or `mitao o[k];` — a property or index. |
 
 ## Type errors (UR2xxx)
 
@@ -89,5 +95,14 @@ app.ur:3:1 — Arre yaar, 'x' ka type 'adad' hai, lekin value 'lafz' de rahe ho.
 | UR2044 | Not a component | A capitalized JSX tag must refer to a `kaam` (component). |
 | UR2045 | Unknown prop | That name isn't in the component's props type — check the spelling, or add it. |
 | UR2046 | Missing required prop | Pass every required prop (or make it optional: `key?: T`). |
+| UR2047 | Unknown method | No such built-in method on this type — check the spelling (or use `koi`). |
+| UR2048 | Bad `hai`/`andar` operand | `x hai Jamaat;` — a class on the right. `"key" andar object;` |
+| UR2049 | Unknown static member | Only `sakit` members are reachable through the class itself. |
+| UR2050 | Private member | A `nijee` member only works inside its own `jamaat`. |
+| UR2051 | Wrong type argument count | Give a generic exactly as many type arguments as it declares. |
+| UR2052 | Impossible cast | `jaisa` needs the two types to overlap; go through `koi` if you really mean it. |
+| UR2053 | Bad enum value | A `fehrist` member's value is a number or string literal. |
+| UR2054 | Bad computed key | In `{ [k]: v }`, `k` must be `lafz` or `adad`. |
+| UR2055 | Unknown label | Label the loop first: `naam: har … { bas naam; }` |
 
 `UR0000` marks an uncatalogued diagnostic — if you see one, it's a bug in the catalog; please report it.

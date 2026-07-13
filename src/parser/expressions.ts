@@ -63,13 +63,24 @@ export abstract class ExpressionParser extends ParserBase {
   }
 
   protected conditional(): Expr {
-    const condition = this.nullish();
+    const condition = this.cast();
     if (!this.at(TokenKind.Question)) return condition;
     this.next();
     const consequent = this.assignment();
     this.expect(TokenKind.Colon, ":");
     const alternate = this.assignment(); // right-associative chains
     return { kind: "Conditional", condition, consequent, alternate, span: condition.span };
+  }
+
+  /** `x jaisa T` — binds looser than any operator, like TS's `as`. */
+  protected cast(): Expr {
+    let expr = this.nullish();
+    while (this.at(TokenKind.Jaisa)) {
+      this.next();
+      const type = this.typeNode();
+      expr = { kind: "CastExpr", expr, type, span: expr.span };
+    }
+    return expr;
   }
 
   /** `a ?? b` — same precedence tier as `||`, but its own level (as in JS). */
@@ -295,6 +306,11 @@ export abstract class ExpressionParser extends ParserBase {
         const index = this.expression();
         this.expect(TokenKind.RBracket, "]");
         expr = { kind: "Index", object: expr, index, optional, span: expr.span };
+      } else if (this.at(TokenKind.Bang)) {
+        // Postfix `!` — the non-null assertion. (Prefix `!` is handled in unary,
+        // so a `!` sitting *after* an operand can only be this.)
+        this.next();
+        expr = { kind: "NonNullExpr", expr, span: expr.span };
       } else if (this.at(TokenKind.PlusPlus) || this.at(TokenKind.MinusMinus)) {
         const t2 = this.next();
         this.requireAssignable(expr, t2);

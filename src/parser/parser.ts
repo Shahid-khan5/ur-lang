@@ -99,6 +99,7 @@ export class Parser extends ExpressionParser {
         if (inner.kind === TokenKind.Kaam) return this.functionDecl(true, false);
         if (inner.kind === TokenKind.Rakho || inner.kind === TokenKind.Pakka) return this.varDecl(true);
         if (inner.kind === TokenKind.Qisim) return this.typeAliasDecl(true);
+        if (inner.kind === TokenKind.Fehrist) return this.enumDecl(true);
         if (inner.kind === TokenKind.Jamaat) return this.classDecl(true);
         if (inner.kind === TokenKind.Asal) {
           this.next();
@@ -128,6 +129,8 @@ export class Parser extends ExpressionParser {
       }
       case TokenKind.Qisim:
         return this.typeAliasDecl(false);
+      case TokenKind.Fehrist:
+        return this.enumDecl(false);
       case TokenKind.Jamaat:
         return this.classDecl(false);
       case TokenKind.Lao:
@@ -326,13 +329,39 @@ export class Parser extends ExpressionParser {
   protected typeAliasDecl(exported: boolean): Stmt {
     const kw = this.expect(TokenKind.Qisim, "qisim");
     const name = this.expect(TokenKind.Identifier, "type ka naam");
+    // `qisim Jorra<T> = { pehla: T }` — a generic alias.
+    const typeParams: string[] = [];
+    if (this.at(TokenKind.Lt)) {
+      this.next();
+      do {
+        typeParams.push(this.expect(TokenKind.Identifier, "type parameter").value);
+      } while (this.matchListComma(TokenKind.Gt));
+      this.expect(TokenKind.Gt, ">");
+    }
     if (!this.at(TokenKind.Assign)) {
       this.fail("Arre yaar, qisim aise likhte hain: qisim Naam = type;", this.peek());
     }
     this.next();
     const type = this.typeNode();
     this.semicolon();
-    return { kind: "TypeAliasDecl", name: name.value, type, exported, span: this.span(kw) };
+    return { kind: "TypeAliasDecl", name: name.value, typeParams, type, exported, span: this.span(kw) };
+  }
+
+  /** `fehrist Rang { Laal, Hara = "h" }` */
+  protected enumDecl(exported: boolean): Stmt {
+    const kw = this.expect(TokenKind.Fehrist, "fehrist");
+    const name = this.expect(TokenKind.Identifier, "fehrist ka naam");
+    this.expect(TokenKind.LBrace, "{");
+    const members: import("../ast.js").EnumMember[] = [];
+    if (!this.at(TokenKind.RBrace)) {
+      do {
+        const member = this.expect(TokenKind.Identifier, "member ka naam");
+        const value = this.match(TokenKind.Assign) ? this.expression() : null;
+        members.push({ name: member.value, value, span: this.span(member) });
+      } while (this.matchListComma(TokenKind.RBrace));
+    }
+    this.expect(TokenKind.RBrace, "}");
+    return { kind: "EnumDecl", name: name.value, members, exported, span: this.span(kw) };
   }
 
   protected paramList(): Param[] {

@@ -65,6 +65,8 @@ export abstract class CheckerBase {
   protected loopDepth = 0;
   /** Labels currently in scope, for `bas naam;` / `agla naam;`. */
   protected readonly labels: string[] = [];
+  /** `qisim Jorra<T> = …` — kept apart from plain aliases; applied at each use. */
+  protected readonly genericAliases = new Map<string, { typeParams: string[]; type: Type }>();
   /** Stack of enclosing function return types; null entry = no annotation (inferred koi). */
   protected readonly returnTypes: (Type | null)[] = [];
   /** Types actually returned by the function being checked (for lambda inference). */
@@ -138,6 +140,20 @@ export abstract class CheckerBase {
             this.error(`Arre yaar, '${node.name}' type arguments nahi leta.`, node.span);
           }
           return builtin;
+        }
+        // `Jorra<adad>` — a generic alias, substituted at the use site.
+        const generic = this.genericAliases.get(node.name);
+        if (generic !== undefined) {
+          if (node.typeArgs.length !== generic.typeParams.length) {
+            this.error(
+              `Arre yaar, '${node.name}' ko ${generic.typeParams.length} type argument chahiye, ${node.typeArgs.length} diye.`,
+              node.span
+            );
+            return KOI;
+          }
+          const subst = new Map<string, Type>();
+          generic.typeParams.forEach((name, i) => subst.set(name, this.resolveType(node.typeArgs[i]!)));
+          return substitute(generic.type, subst);
         }
         const named = this.scope.lookupType(node.name);
         if (named !== null) {

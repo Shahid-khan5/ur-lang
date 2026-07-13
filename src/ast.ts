@@ -51,7 +51,9 @@ export type Expr =
   | JsxFragment
   | Update
   | DeleteExpr
-  | RegexLiteral;
+  | RegexLiteral
+  | CastExpr
+  | NonNullExpr;
 
 export interface NumberLiteral { kind: "NumberLiteral"; value: number; raw: string; span: Span }
 export interface StringLiteral { kind: "StringLiteral"; value: string; span: Span }
@@ -88,6 +90,10 @@ export interface Update { kind: "Update"; op: "++" | "--"; prefix: boolean; targ
 export interface DeleteExpr { kind: "DeleteExpr"; target: Expr; span: Span }
 /** `/ab+c/gi` — kept verbatim and emitted as-is. */
 export interface RegexLiteral { kind: "RegexLiteral"; raw: string; span: Span }
+/** `x jaisa adad` → TypeScript's `x as number`. Erased at runtime. */
+export interface CastExpr { kind: "CastExpr"; expr: Expr; type: TypeNode; span: Span }
+/** `x!` — asserts the value is not khaali. Erased at runtime. */
+export interface NonNullExpr { kind: "NonNullExpr"; expr: Expr; span: Span }
 /** `&&`/`||` take bools; `??` takes anything and falls back when the left is khaali. */
 export interface Logical { kind: "Logical"; op: "&&" | "||" | "??"; left: Expr; right: Expr; span: Span }
 export interface Assignment {
@@ -215,7 +221,8 @@ export type Stmt =
   | DoWhileStmt
   | ForStmt
   | SwitchStmt
-  | LabeledStmt;
+  | LabeledStmt
+  | EnumDecl;
 
 export interface VarDecl {
   kind: "VarDecl";
@@ -290,11 +297,22 @@ export interface FunctionDecl {
   span: Span;
 }
 
-/** `qisim Shakhs = { naam: lafz };` — a named, exportable type alias. */
+/** `qisim Shakhs = { naam: lafz };` / `qisim Jorra<T> = { a: T };` */
 export interface TypeAliasDecl {
   kind: "TypeAliasDecl";
   name: string;
+  typeParams: string[];
   type: TypeNode;
+  exported: boolean;
+  span: Span;
+}
+
+/** `fehrist Rang { Laal, Hara = "h" }` → a frozen object plus a literal-union type. */
+export interface EnumMember { name: string; value: Expr | null; span: Span }
+export interface EnumDecl {
+  kind: "EnumDecl";
+  name: string;
+  members: EnumMember[];
   exported: boolean;
   span: Span;
 }

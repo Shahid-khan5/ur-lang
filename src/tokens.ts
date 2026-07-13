@@ -119,6 +119,8 @@ export enum TokenKind {
   Nijee, // private
   Hasil, // get (getter)
   Lagao, // set (setter)
+  Fehrist, // enum
+  Jaisa, // as (type assertion)
   /** A regex literal, e.g. /ab+c/gi — value holds the whole literal. */
   Regex,
   /** `?.(` — optional call */
@@ -182,4 +184,6 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ["nijee", TokenKind.Nijee],
   ["hasil", TokenKind.Hasil],
   ["lagao", TokenKind.Lagao],
+  ["fehrist", TokenKind.Fehrist],
+  ["jaisa", TokenKind.Jaisa],
 ]);

@@ -234,9 +234,18 @@ class Formatter {
             : `bahar ${stmt.name}: ${this.type(stmt.typeAnnotation)};`
         );
         return;
-      case "TypeAliasDecl":
-        this.line(stmt, `${stmt.exported ? "bhejo " : ""}qisim ${stmt.name} = ${this.type(stmt.type)};`);
+      case "TypeAliasDecl": {
+        const tp = stmt.typeParams.length > 0 ? `<${stmt.typeParams.join(", ")}>` : "";
+        this.line(stmt, `${stmt.exported ? "bhejo " : ""}qisim ${stmt.name}${tp} = ${this.type(stmt.type)};`);
         return;
+      }
+      case "EnumDecl": {
+        const members = stmt.members
+          .map((m) => (m.value === null ? m.name : `${m.name} = ${this.expr(m.value, 0)}`))
+          .join(", ");
+        this.line(stmt, `${stmt.exported ? "bhejo " : ""}fehrist ${stmt.name} { ${members} }`);
+        return;
+      }
       case "ThrowStmt":
         this.line(stmt, `phenko ${this.expr(stmt.value, 0)};`);
         return;
@@ -451,6 +460,12 @@ class Formatter {
         return `mitao ${this.expr(e.target, 7)}`;
       case "RegexLiteral":
         return e.raw;
+      case "CastExpr": {
+        const inner = `${this.expr(e.expr, 1)} jaisa ${this.type(e.type)}`;
+        return parentPrecedence > 0 ? `(${inner})` : inner;
+      }
+      case "NonNullExpr":
+        return `${this.expr(e.expr, 8)}!`;
       case "FunctionExpr": {
         const ret = e.returnType !== null ? `: ${this.type(e.returnType)}` : "";
         // Function expression bodies format on one line when short, else keep

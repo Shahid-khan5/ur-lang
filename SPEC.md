@@ -1,6 +1,6 @@
 # UrLang Language Specification
 
-Version 1.1 — covers the syntax and typing rules implemented by the reference compiler. The conformance suite (`tests/conformance/`) executes examples of every rule below.
+Version 1.4 — covers the syntax and typing rules implemented by the reference compiler. The conformance suite (`tests/conformance/`) executes examples of every rule below.
 
 ## 1. Lexical structure
 
@@ -9,7 +9,7 @@ Version 1.1 — covers the syntax and typing rules implemented by the reference 
 - **Numbers:** decimals (`3`, `3.14`), `_` separators (`1_000_000`), and radix prefixes `0x`, `0b`, `0o`.
 - **Strings:** `"..."` or `'...'` with escapes `\n \t \r \\ \" \' \0`.
 - **Template strings:** `` `text ${expr} text` `` with escapes ``\` \$ \\ \n \t \r``; may span lines.
-- **Reserved words:** `rakho pakka bolo agar warna jab tak bas agla kaam wapas sach jhoot khaali bhejo lao se bahar har mein koshish pakro akhir phenko intezar qisim asal sab jamaat naya yeh waris buzurg`.
+- **Reserved words:** `rakho pakka bolo agar warna jab tak bas agla kaam wapas sach jhoot khaali bhejo lao se bahar har mein koshish pakro akhir phenko intezar qisim asal sab jamaat naya yeh waris buzurg chuno surat karo sakit nijee hasil lagao fehrist jaisa noeyat hai andar mitao`.
 - **Trailing commas** are permitted before the closing bracket of any comma-separated list (arguments, parameters, array/object literals, import/export lists, object types, type parameters).
 - **File extensions:** `.ur`, and `.urx` for files containing JSX. In a `.urx` file, a `<` in operand position (i.e. not after a value) followed by a name or `>` opens a JSX element; everywhere else `<` is less-than. `.ur` files never lex JSX, so `a < b` is unambiguous there.
 
@@ -19,35 +19,51 @@ Version 1.1 — covers the syntax and typing rules implemented by the reference 
 program        = { statement } ;
 
 statement      = varDecl | destructureDecl | printStmt | ifStmt | whileStmt
-               | forEachStmt | forRangeStmt | breakStmt | continueStmt
+               | doWhileStmt | forEachStmt | forRangeStmt | forStmt | switchStmt
+               | labeledStmt | breakStmt | continueStmt
                | functionDecl | returnStmt | importStmt | exportStmt
-               | externDecl | typeAliasDecl | classDecl | tryStmt | throwStmt
-               | blockStmt | exprStmt ;
+               | externDecl | typeAliasDecl | enumDecl | classDecl | tryStmt
+               | throwStmt | blockStmt | exprStmt ;
 
 varDecl        = ("rakho" | "pakka") IDENT [":" type] "=" expr ";" ;
-destructureDecl= ("rakho" | "pakka") ("{" identList "}" | "[" identList "]") "=" expr ";" ;
+destructureDecl= ("rakho" | "pakka") pattern "=" expr ";" ;
+pattern        = objectPattern | arrayPattern ;
+objectPattern  = "{" [ patProp { "," patProp } [ "," "..." IDENT ] ] "}" ;
+patProp        = IDENT [":" bindTarget] ["=" expr] ;               (* rename / nest / default *)
+arrayPattern   = "[" [ patElem { "," patElem } [ "," "..." IDENT ] ] "]" ;
+patElem        = bindTarget ["=" expr] ;
+bindTarget     = IDENT | pattern ;
 printStmt      = "bolo" expr { "," expr } ";" ;
 ifStmt         = "agar" "(" expr ")" block { "warna" "agar" "(" expr ")" block } ["warna" block] ;
 whileStmt      = "jab" "tak" "(" expr ")" block ;
+doWhileStmt    = "karo" block "jab" "tak" "(" expr ")" ";" ;
 forEachStmt    = "har" IDENT expr "mein" block ;
 forRangeStmt   = "har" IDENT expr "se" expr "tak" block ;          (* inclusive *)
-breakStmt      = "bas" ";" ;
-continueStmt   = "agla" ";" ;
+forStmt        = "har" "(" [statement] ";" [expr] ";" [expr] ")" block ;   (* C-style *)
+switchStmt     = "chuno" "(" expr ")" "{" { switchCase } "}" ;
+switchCase     = ("surat" expr | "warna") ":" { statement } ;      (* falls through, as in JS *)
+labeledStmt    = IDENT ":" statement ;
+breakStmt      = "bas" [IDENT] ";" ;
+continueStmt   = "agla" [IDENT] ";" ;
 functionDecl   = "kaam" IDENT [typeParams] "(" [paramList] ")" [":" type] block ;
 typeParams     = "<" IDENT { "," IDENT } ">" ;
 paramList      = param { "," param } ;
-param          = ["..."] IDENT ["?"] [":" type] ["=" expr] ;       (* rest last; ? xor default *)
+param          = ["..."] (IDENT ["?"] | pattern) [":" type] ["=" expr] ;  (* rest last; ? xor default *)
 returnStmt     = "wapas" [expr] ";" ;
 importStmt     = "lao" importClause STRING "se" ";" ;
 importClause   = "sab" IDENT | ["asal" IDENT [","]] ["{" identList "}"] ;
-exportStmt     = "bhejo" (functionDecl | varDecl | typeAliasDecl | classDecl
+exportStmt     = "bhejo" (functionDecl | varDecl | typeAliasDecl | enumDecl | classDecl
                | "asal" (functionDecl | expr ";")
                | "{" identList "}" STRING "se" ";") ;              (* last = re-export *)
-externDecl     = "bahar" IDENT ";" ;
-typeAliasDecl  = "qisim" IDENT "=" type ";" ;
-classDecl      = "jamaat" IDENT ["waris" IDENT] "{" { classMember } "}" ;
-classMember    = IDENT ":" type ["=" expr] ";"                     (* field *)
-               | IDENT "(" [paramList] ")" [":" type] block ;      (* method; banao = ctor *)
+externDecl     = "bahar" IDENT [":" type] ";" ;
+typeAliasDecl  = "qisim" IDENT [typeParams] "=" type ";" ;
+enumDecl       = "fehrist" IDENT "{" [enumMember { "," enumMember }] "}" ;
+enumMember     = IDENT ["=" (NUMBER | STRING)] ;                   (* auto-numbered from 0 *)
+classDecl      = "jamaat" IDENT [typeParams] ["waris" IDENT] "{" { classMember } "}" ;
+classMember    = modifiers IDENT ":" type ["=" expr] ";"           (* field *)
+               | modifiers ["hasil" | "lagao"] IDENT
+                 "(" [paramList] ")" [":" type] block ;            (* method / accessor; banao = ctor *)
+modifiers      = { "sakit" | "nijee" } ;                           (* static / private *)
 tryStmt        = "koshish" block ["pakro" "(" IDENT ")" block] ["akhir" block] ;
 throwStmt      = "phenko" expr ";" ;
 blockStmt      = block ;
@@ -65,28 +81,39 @@ literalType    = STRING | NUMBER | "sach" | "jhoot" ;
 
 expr           = assignment ;
 assignment     = conditional [assignOp assignment] ;               (* target: ident/member/index *)
-assignOp       = "=" | "+=" | "-=" | "*=" | "/=" | "%=" ;
-conditional    = nullish ["?" assignment ":" assignment] ;
+assignOp       = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**="
+               | "&=" | "|=" | "^=" | "<<=" | ">>=" | ">>>=" ;
+conditional    = cast ["?" assignment ":" assignment] ;
+cast           = nullish { "jaisa" type } ;                        (* TypeScript's `as` *)
 nullish        = logicalOr { "??" logicalOr } ;
 logicalOr      = logicalAnd { "||" logicalAnd } ;
-logicalAnd     = equality { "&&" equality } ;
+logicalAnd     = bitOr { "&&" bitOr } ;
+bitOr          = bitXor { "|" bitXor } ;
+bitXor         = bitAnd { "^" bitAnd } ;
+bitAnd         = equality { "&" equality } ;
 equality       = comparison { ("==" | "!=") comparison } ;
-comparison     = additive { ("<" | ">" | "<=" | ">=") additive } ;
+comparison     = shift { ("<" | ">" | "<=" | ">=" | "hai" | "andar") shift } ;
+shift          = additive { ("<<" | ">>" | ">>>") additive } ;
 additive       = multiplicative { ("+" | "-") multiplicative } ;
-multiplicative = unary { ("*" | "/" | "%") unary } ;
-unary          = ("-" | "!" | "intezar") unary | postfix ;
-postfix        = primary { call | "." IDENT | "?." IDENT | "[" expr "]" } ;
+multiplicative = exponent { ("*" | "/" | "%") exponent } ;
+exponent       = unary ["**" exponent] ;                           (* right-associative *)
+unary          = ("-" | "!" | "~" | "noeyat" | "mitao" | "++" | "--" | "intezar") unary
+               | postfix ;
+postfix        = primary { call | "?.(" [argList] ")" | "." IDENT | "?." IDENT
+                         | "[" expr "]" | "?.[" expr "]" | "!" | "++" | "--" } ;
 call           = "(" [argList] ")" ;
 argList        = arg { "," arg } ;   arg = ["..."] expr ;
-primary        = NUMBER | STRING | template | "sach" | "jhoot" | "khaali"
+primary        = NUMBER | STRING | REGEX | template | "sach" | "jhoot" | "khaali"
                | IDENT | "yeh" | "(" expr ")" | arrayLit | objectLit
                | "kaam" "(" [paramList] ")" [":" type] block        (* fn expression *)
-               | "naya" IDENT "(" [argList] ")"
+               | "naya" IDENT ["<" type { "," type } ">"] "(" [argList] ")"
                | "buzurg" ("(" [argList] ")" | "." IDENT)
                | jsxElement ;                                       (* .urx files only *)
 arrayLit       = "[" [arg { "," arg }] "]" ;
 objectLit      = "{" [objEntry { "," objEntry }] "}" ;
-objEntry       = (IDENT | STRING) ":" expr | IDENT | "..." expr ;  (* `{ naam }` shorthand *)
+objEntry       = (IDENT | STRING) ":" expr                         (* `{ naam }` shorthand *)
+               | "[" expr "]" ":" expr                             (* computed key *)
+               | IDENT | "..." expr ;
 externDecl     = "bahar" IDENT [":" type] ";" ;
 
 (* JSX — only in .urx files, where `<` in operand position opens an element. *)
@@ -131,6 +158,9 @@ Within `agar`/ternary branches, a variable's type narrows when the condition is:
 - `+`: adad+adad→adad; any lafz operand → lafz; `koi` propagates.
 - `- * / % < > <= >=`: adad only.
 - `== !=`: operands must overlap after widening; compiles to `===`/`!==`, except comparisons with `khaali`, which compile to loose `== null` (matching both null and undefined).
+- `& | ^ ~ << >> >>>`, `**`: adad only, result adad. `++`/`--` require a mutable adad target.
+- `noeyat x` → lafz (works on anything). `x hai C` → bool (C must be a jamaat). `k andar o` → bool. `mitao o.k` → bool (member/index targets only).
+- `x jaisa T` re-types `x` when the two overlap in either direction (TS's rule for `as`); unrelated types are rejected. `x!` removes khaali. Both erase at runtime.
 - `&& || !`: bool only. Conditions must be bool — no truthiness.
 - `??`: `a ?? b` is `b` when `a` is khaali. Its type is (`a` minus `khaali`) unified with `b`. Mixing `??` with `&&`/`||` requires explicit parentheses in the emitted JS, which the compiler inserts.
 - `intezar e`: unwraps `Wada<T>` to `T`; non-promises pass through.
@@ -144,7 +174,14 @@ Within `agar`/ternary branches, a variable's type narrows when the condition is:
 
 ### 3.6 Classes
 
-`jamaat` declares a class: typed fields (with optional initializers), methods, `banao` constructor, `yeh` typed as the instance, single inheritance via `waris` (fields/methods/constructor inherited), `buzurg(...)`/`buzurg.m()` checked against the parent. Instances are structurally typed. No statics/private/interfaces in v1.
+`jamaat` declares a class: typed fields (with optional initializers), methods, `banao` constructor, `yeh` typed as the instance, single inheritance via `waris` (fields/methods/constructor inherited), `buzurg(...)`/`buzurg.m()` checked against the parent. Instances are structurally typed.
+
+- **`sakit`** members live on the class (`Ginti.kul`), not on instances; the two namespaces are separate, and confusing them is an error.
+- **`hasil` / `lagao`** declare a getter/setter: the member reads and writes as a plain property of the getter's return type (or the setter's parameter type).
+- **`nijee`** members are usable only inside their own class. They remain part of the instance type — so the class's own code can see them — but carry their owner, which also stops a plain object type that merely declares the same field name from standing in for the instance.
+- **`jamaat Dabba<T>`** is generic. The argument may be written (`naya Dabba<adad>(x)`) or inferred from the constructor call, and is substituted through fields, methods, and the constructor.
+
+`fehrist` declares an enum: at runtime a frozen object of its members (auto-numbered from 0, or explicitly valued with numbers/strings), and at compile time the union of their literal types — so only its own members satisfy it.
 
 ### 3.7 Built-in methods
 
