@@ -2,7 +2,7 @@
   "name": "urlang-vscode",
   "displayName": "UrLang",
   "description": "UrLang (.ur / .urx) language support: syntax highlighting, live type errors, hover types, autocomplete, go-to-definition.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "publisher": "shahidkhandev",
   "license": "MIT",
   "repository": {
@@ -43,8 +43,8 @@
       "properties": {
         "urlang.lspPath": {
           "type": "string",
-          "default": "urlang",
-          "description": "Path to the urlang CLI used to start the language server (`urlang lsp`)."
+          "default": "",
+          "description": "Optional: path to the urlang CLI, or to ur-lang's dist/lsp/server.js. Leave empty to use the ur-lang installed in the workspace, falling back to `urlang` on PATH."
         }
       }
     }
