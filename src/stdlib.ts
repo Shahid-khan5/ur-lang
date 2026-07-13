@@ -99,20 +99,48 @@ export function arrayMemberType(element: Type, name: string): Type | null {
 }
 
 /** `adad` methods. Anything unlisted is an error, not a silent koi. */
+const NUMBER_MEMBERS: ReadonlyMap<string, Type> = new Map([
+  ["toFixed", functionOf([ADAD], LAFZ, { requiredParams: 0 })],
+  ["toString", functionOf([ADAD], LAFZ, { requiredParams: 0 })], // optional radix
+]);
+
 export function numberMemberType(name: string): Type | null {
-  switch (name) {
-    case "toFixed":
-      return functionOf([ADAD], LAFZ, { requiredParams: 0 });
-    case "toString":
-      return functionOf([ADAD], LAFZ, { requiredParams: 0 }); // optional radix
-    default:
-      return null;
-  }
+  return NUMBER_MEMBERS.get(name) ?? null;
 }
 
 /** `bool` methods. */
+const BOOL_MEMBERS: ReadonlyMap<string, Type> = new Map([["toString", functionOf([], LAFZ)]]);
+
 export function boolMemberType(name: string): Type | null {
-  return name === "toString" ? functionOf([], LAFZ) : null;
+  return BOOL_MEMBERS.get(name) ?? null;
+}
+
+/**
+ * Every member name a type carries, for editor completions. Derived from the
+ * same tables the checker uses, so the two can never drift apart.
+ */
+export function arrayMemberNames(): string[] {
+  return [
+    "length", "map", "flatMap", "filter", "reduce", "slice", "concat", "reverse", "sort", "flat",
+    "find", "findIndex", "some", "every", "includes", "indexOf", "lastIndexOf",
+    "push", "unshift", "pop", "shift", "forEach", "join",
+  ];
+}
+
+export function stringMemberNames(): string[] {
+  return [
+    "length", "toUpperCase", "toLowerCase", "trim", "trimStart", "trimEnd", "repeat",
+    "padStart", "padEnd", "slice", "substring", "charAt", "at", "split",
+    "replace", "replaceAll", "concat", "includes", "startsWith", "endsWith", "indexOf", "lastIndexOf",
+  ];
+}
+
+export function numberMemberNames(): string[] {
+  return [...NUMBER_MEMBERS.keys()];
+}
+
+export function boolMemberNames(): string[] {
+  return [...BOOL_MEMBERS.keys()];
 }
 
 /** String methods. `lafz` is immutable, so every one of these is pure. */

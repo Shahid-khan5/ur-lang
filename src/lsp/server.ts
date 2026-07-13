@@ -20,6 +20,8 @@ interface RpcMessage {
 }
 
 const documents = new Map<string, { text: string; analysis: Analysis }>();
+/** Per-document: the most recent analysis whose source actually parsed. */
+const lastGood = new Map<string, Analysis>();
 let shuttingDown = false;
 
 // npm-package type resolution (needs the optional `typescript` package).
@@ -81,10 +83,15 @@ function offsetOf(text: string, line: number, character: number): number {
 
 function refresh(uri: string, text: string): void {
   const resolveModule = resolverFor(uri);
+  const previous = lastGood.get(uri);
   const analysis = analyze(text, {
     ...(resolveModule ? { resolveModule } : {}),
+    ...(previous ? { previous } : {}),
     jsx: uri.endsWith(".urx"),
   });
+  // Remember the last analysis that parsed, so hover/completions survive the
+  // half-typed states in between.
+  if (analysis.parsed) lastGood.set(uri, analysis);
   documents.set(uri, { text, analysis });
   send({
     method: "textDocument/publishDiagnostics",
@@ -143,6 +150,7 @@ function handle(msg: RpcMessage): void {
     case "textDocument/didClose": {
       const p = msg.params as { textDocument: { uri: string } };
       documents.delete(p.textDocument.uri);
+      lastGood.delete(p.textDocument.uri);
       return;
     }
     case "textDocument/hover": {
@@ -184,7 +192,8 @@ function handle(msg: RpcMessage): void {
       const doc = documents.get(p.textDocument.uri);
       if (doc === undefined) return send({ id: msg.id, result: [] });
       const items = doc.analysis.completions(offsetOf(doc.text, p.position.line, p.position.character));
-      const kindMap = { variable: 6, keyword: 14, global: 6, property: 5 } as const;
+      // LSP CompletionItemKind: Variable 6, Keyword 14, Property 5, Interface 8.
+      const kindMap = { variable: 6, keyword: 14, global: 6, property: 5, type: 8 } as const;
       send({
         id: msg.id,
         result: items.map((c) => ({ label: c.label, kind: kindMap[c.kind], detail: c.detail })),

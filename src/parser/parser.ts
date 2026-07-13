@@ -188,7 +188,16 @@ export class Parser extends ExpressionParser {
     this.next();
     const init = this.expression();
     this.semicolon();
-    return { kind: "VarDecl", mutable, name: name.value, typeAnnotation, init, exported, span: this.span(kw) };
+    return {
+      kind: "VarDecl",
+      mutable,
+      name: name.value,
+      nameSpan: this.span(name),
+      typeAnnotation,
+      init,
+      exported,
+      span: this.span(kw),
+    };
   }
 
   // Type grammar: union := postfix ('|' postfix)* ; postfix := primary ('[]')* ;
@@ -317,6 +326,7 @@ export class Parser extends ExpressionParser {
     return {
       kind: "ClassDecl",
       name: name.value,
+      nameSpan: this.span(name),
       typeParams,
       parent,
       fields,
@@ -361,7 +371,14 @@ export class Parser extends ExpressionParser {
       } while (this.matchListComma(TokenKind.RBrace));
     }
     this.expect(TokenKind.RBrace, "}");
-    return { kind: "EnumDecl", name: name.value, members, exported, span: this.span(kw) };
+    return {
+      kind: "EnumDecl",
+      name: name.value,
+      nameSpan: this.span(name),
+      members,
+      exported,
+      span: this.span(kw),
+    };
   }
 
   protected paramList(): Param[] {
@@ -436,6 +453,7 @@ export class Parser extends ExpressionParser {
     return {
       kind: "FunctionDecl",
       name: name.value,
+      nameSpan: this.span(name),
       typeParams,
       params,
       returnType,

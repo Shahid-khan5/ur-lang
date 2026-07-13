@@ -37,6 +37,15 @@ async function main(argv: string[]): Promise<number> {
     return command === undefined ? 1 : 0;
   }
 
+  if (command === "--version" || command === "-v") {
+    // Read from the package we were actually launched from, so a linked dev
+    // build reports the dev version rather than a stale constant.
+    const pkgPath = new URL("../package.json", import.meta.url);
+    const { version } = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { version: string };
+    process.stdout.write(`${version}\n`);
+    return 0;
+  }
+
   if (command === "lsp") {
     await import("./lsp/server.js"); // starts the stdio loop
     return await new Promise<number>(() => {}); // stays alive until exit notification

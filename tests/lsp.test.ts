@@ -23,6 +23,85 @@ function pos(source: string, line: number, character: number): number {
   return offset + character;
 }
 
+describe("lsp completions: built-in members", () => {
+  it("offers array methods after `xs.`", () => {
+    const src = "pakka xs = [1, 2, 3];\nbolo xs.\n";
+    const items = analyze(src).completions(pos(src, 1, 8));
+    const labels = items.map((i) => i.label);
+    expect(labels).toEqual(expect.arrayContaining(["map", "filter", "find", "push", "length", "join"]));
+    // The signatures come along, so the editor can show them.
+    expect(items.find((i) => i.label === "map")!.detail).toContain("kaam");
+    expect(items.find((i) => i.label === "length")!.detail).toBe("adad");
+    // And it is *only* members — no keyword noise.
+    expect(labels).not.toContain("rakho");
+  });
+
+  it("offers string methods after a lafz", () => {
+    const src = 'pakka s = "salaam";\nbolo s.\n';
+    const labels = analyze(src).completions(pos(src, 1, 7)).map((i) => i.label);
+    expect(labels).toEqual(expect.arrayContaining(["toUpperCase", "split", "trim", "includes", "length"]));
+  });
+
+  it("offers a jamaat's sakit members through the class", () => {
+    const src = "jamaat Ginti {\n  sakit kul: adad = 0;\n}\nbolo Ginti.\n";
+    const labels = analyze(src).completions(pos(src, 3, 11)).map((i) => i.label);
+    expect(labels).toContain("kul");
+  });
+
+  it("still offers object properties", () => {
+    const src = 'pakka s = { naam: "Ali", umar: 30 };\nbolo s.\n';
+    const labels = analyze(src).completions(pos(src, 1, 7)).map((i) => i.label);
+    expect(labels).toEqual(["naam", "umar"]);
+  });
+});
+
+describe("lsp completions: type positions", () => {
+  it("offers builtin types and declared type names after `:`", () => {
+    const src = "qisim Shakhs = { naam: lafz };\nfehrist Rang { Laal }\njamaat Dabba {}\npakka x: \n";
+    const items = analyze(src).completions(pos(src, 3, 9));
+    const labels = items.map((i) => i.label);
+    expect(labels).toEqual(expect.arrayContaining(["adad", "lafz", "bool", "koi", "khaali", "Wada"]));
+    expect(labels).toEqual(expect.arrayContaining(["Shakhs", "Rang", "Dabba"]));
+    // Values and keywords are not types.
+    expect(labels).not.toContain("bolo");
+  });
+
+  it("offers types in a parameter annotation", () => {
+    const src = "qisim Shakhs = { naam: lafz };\nkaam f(s: \n";
+    const labels = analyze(src).completions(pos(src, 1, 10)).map((i) => i.label);
+    expect(labels).toContain("Shakhs");
+    expect(labels).toContain("adad");
+  });
+});
+
+describe("lsp resilience while typing", () => {
+  // A file is syntactically broken for most of the time you are editing it.
+  // Hover and completions must keep working from the last good parse, or the
+  // editor goes blank exactly when you need it.
+  it("keeps hover and completions alive through a broken edit", () => {
+    const good = 'qisim Shakhs = { naam: lafz };\npakka s: Shakhs = { naam: "Ali" };\nbolo s.naam;\n';
+    const settled = analyze(good);
+
+    // Mid-edit: the user has typed `bolo s.` and nothing else yet.
+    const broken = 'qisim Shakhs = { naam: lafz };\npakka s: Shakhs = { naam: "Ali" };\nbolo s.\n';
+    const live = analyze(broken, { previous: settled });
+
+    // The syntax error is still reported…
+    expect(live.diagnostics.length).toBeGreaterThan(0);
+    // …but the editor still knows what `s` is, and what it has.
+    expect(live.hover(pos(broken, 1, 6))!.type).toContain("naam");
+    expect(live.completions(pos(broken, 2, 7)).map((i) => i.label)).toContain("naam");
+  });
+
+  it("without a previous analysis it degrades quietly, not loudly", () => {
+    const broken = "pakka s = ";
+    const live = analyze(broken);
+    expect(live.diagnostics.length).toBeGreaterThan(0);
+    expect(() => live.completions(broken.length)).not.toThrow();
+    expect(live.hover(3)).toBeNull();
+  });
+});
+
 describe("lsp analysis", () => {
   it("reports diagnostics with spans and codes", () => {
     const result = analyze('rakho x: adad = "nahi";');

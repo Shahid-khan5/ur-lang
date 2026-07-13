@@ -196,7 +196,7 @@ export class Checker extends ExpressionChecker {
       memberTypes.push(t);
     }
     const valueType: Type = { kind: "object", props };
-    if (!this.declareValue(decl.name, valueType, false, decl.span)) {
+    if (!this.declareValue(decl.name, valueType, false, decl.nameSpan)) {
       this.error(`Arre yaar, '${decl.name}' pehle se declared hai isi scope mein.`, decl.span);
       return;
     }
@@ -245,7 +245,7 @@ export class Checker extends ExpressionChecker {
     for (const stmt of body) {
       if (stmt.kind === "ClassDecl") {
         const classType = this.classType(stmt);
-        if (!this.declareValue(stmt.name, classType, false, stmt.span)) {
+        if (!this.declareValue(stmt.name, classType, false, stmt.nameSpan)) {
           this.error(`Arre yaar, '${stmt.name}' pehle se declared hai isi scope mein.`, stmt.span);
           continue;
         }
@@ -259,7 +259,7 @@ export class Checker extends ExpressionChecker {
       }
       if (stmt.kind === "FunctionDecl") {
         const type = this.functionType(stmt);
-        if (!this.declareValue(stmt.name, type, false, stmt.span)) {
+        if (!this.declareValue(stmt.name, type, false, stmt.nameSpan)) {
           this.error(`Arre yaar, '${stmt.name}' pehle se declared hai isi scope mein.`, stmt.span);
         } else if (stmt.exported && scope.parent === null) {
           this.exports.values.set(stmt.name, type);
@@ -296,7 +296,7 @@ export class Checker extends ExpressionChecker {
             declared = initType; // pakka keeps literal types, like TS const
           }
         }
-        if (!this.declareValue(stmt.name, declared, stmt.mutable, stmt.span)) {
+        if (!this.declareValue(stmt.name, declared, stmt.mutable, stmt.nameSpan)) {
           this.error(`Arre yaar, '${stmt.name}' pehle se declared hai isi scope mein.`, stmt.span);
         } else if (stmt.exported && this.scope.parent === null) {
           this.exports.values.set(stmt.name, declared);

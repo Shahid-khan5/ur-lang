@@ -2,7 +2,7 @@
   "name": "urlang-vscode",
   "displayName": "UrLang",
   "description": "UrLang (.ur / .urx) language support: syntax highlighting, live type errors, hover types, autocomplete, go-to-definition.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "shahidkhandev",
   "license": "MIT",
   "repository": {

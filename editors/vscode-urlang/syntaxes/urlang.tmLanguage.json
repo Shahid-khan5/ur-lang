@@ -83,17 +83,25 @@
     },
     "numbers": {
       "name": "constant.numeric.urlang",
-      "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+      "match": "\\b(0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|[0-9][0-9_]*(\\.[0-9_]+)?)\\b"
     },
     "keywords": {
       "patterns": [
         {
           "name": "keyword.control.urlang",
-          "match": "\\b(agar|warna|jab|tak|bas|agla|wapas|har|mein|koshish|pakro|akhir|phenko|intezar)\\b"
+          "match": "\\b(agar|warna|jab|tak|bas|agla|wapas|har|mein|koshish|pakro|akhir|phenko|intezar|chuno|surat|karo)\\b"
         },
         {
           "name": "storage.type.urlang",
-          "match": "\\b(rakho|pakka|kaam|qisim|jamaat|waris)\\b"
+          "match": "\\b(rakho|pakka|kaam|qisim|jamaat|waris|fehrist)\\b"
+        },
+        {
+          "name": "storage.modifier.urlang",
+          "match": "\\b(sakit|nijee|hasil|lagao)\\b"
+        },
+        {
+          "name": "keyword.operator.word.urlang",
+          "match": "\\b(noeyat|hai|andar|mitao|jaisa)\\b"
         },
         {
           "name": "keyword.other.urlang",
@@ -107,7 +115,7 @@
     },
     "types": {
       "name": "support.type.urlang",
-      "match": "\\b(adad|lafz|bool|koi|kuchnahi|Wada)\\b"
+      "match": "\\b(adad|lafz|bool|koi|khaali|kuchnahi|Wada)\\b"
     },
     "constants": {
       "name": "constant.language.urlang",

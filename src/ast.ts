@@ -228,6 +228,8 @@ export interface VarDecl {
   kind: "VarDecl";
   mutable: boolean; // rakho = true, pakka = false
   name: string;
+  /** Span of the *name* — what hover and go-to-definition point at. */
+  nameSpan: Span;
   typeAnnotation: TypeNode | null;
   init: Expr;
   exported: boolean;
@@ -286,6 +288,7 @@ export interface Param {
 export interface FunctionDecl {
   kind: "FunctionDecl";
   name: string;
+  nameSpan: Span;
   typeParams: string[];
   params: Param[];
   returnType: TypeNode | null;
@@ -312,6 +315,7 @@ export interface EnumMember { name: string; value: Expr | null; span: Span }
 export interface EnumDecl {
   kind: "EnumDecl";
   name: string;
+  nameSpan: Span;
   members: EnumMember[];
   exported: boolean;
   span: Span;
@@ -434,6 +438,7 @@ export interface ClassMethod {
 export interface ClassDecl {
   kind: "ClassDecl";
   name: string;
+  nameSpan: Span;
   typeParams: string[];
   parent: string | null;
   fields: ClassField[];
