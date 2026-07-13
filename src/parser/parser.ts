@@ -4,6 +4,8 @@ import { Token, TokenKind } from "../tokens.js";
 import { tokenize } from "../lexer.js";
 import { UrSyntaxError } from "../errors.js";
 import type {
+  ArrayPattern,
+  ArrayPatternElement,
   Assignment,
   BlockStmt,
   Expr,
@@ -13,7 +15,10 @@ import type {
   JsxChild,
   JsxElement,
   JsxFragment,
+  ObjectPattern,
+  ObjectPatternProp,
   Param,
+  Pattern,
   Program,
   Span,
   Stmt,
@@ -294,6 +299,24 @@ export class Parser extends ExpressionParser {
     if (!this.at(TokenKind.RParen)) {
       do {
         const rest = this.match(TokenKind.DotDotDot) !== null;
+        // `kaam f({ naam }: Shakhs)` — a destructured parameter.
+        if (!rest && (this.at(TokenKind.LBrace) || this.at(TokenKind.LBracket))) {
+          const start = this.peek();
+          const pattern = this.destructurePattern();
+          let patternType: TypeNode | null = null;
+          if (this.match(TokenKind.Colon)) patternType = this.typeNode();
+          const patternDefault = this.match(TokenKind.Assign) ? this.expression() : null;
+          params.push({
+            name: "",
+            pattern,
+            typeAnnotation: patternType,
+            optional: false,
+            defaultValue: patternDefault,
+            rest: false,
+            span: this.span(start),
+          });
+          continue;
+        }
         const p = this.expect(TokenKind.Identifier, "parameter naam");
         const optional = !rest && this.match(TokenKind.Question) !== null;
         let typeAnnotation: TypeNode | null = null;
@@ -304,7 +327,15 @@ export class Parser extends ExpressionParser {
           if (rest) this.fail("Arre yaar, rest parameter ki default value nahi hoti.", p);
           defaultValue = this.expression();
         }
-        params.push({ name: p.value, typeAnnotation, optional, defaultValue, rest, span: this.span(p) });
+        params.push({
+          name: p.value,
+          pattern: null,
+          typeAnnotation,
+          optional,
+          defaultValue,
+          rest,
+          span: this.span(p),
+        });
         if (rest && !this.at(TokenKind.RParen)) {
           this.fail("Arre yaar, rest parameter aakhri hona chahiye.", this.peek());
         }
@@ -439,27 +470,79 @@ export class Parser extends ExpressionParser {
   protected destructureDecl(): Stmt {
     const kw = this.next(); // rakho | pakka
     const mutable = kw.kind === TokenKind.Rakho;
-    const open = this.next(); // { or [
-    const isObject = open.kind === TokenKind.LBrace;
-    const closer = isObject ? TokenKind.RBrace : TokenKind.RBracket;
-    const names: string[] = [];
-    do {
-      names.push(this.expect(TokenKind.Identifier, "naam").value);
-    } while (this.matchListComma(closer));
-    this.expect(closer, isObject ? "}" : "]");
+    const pattern = this.destructurePattern();
     if (!this.at(TokenKind.Assign)) {
       this.fail("Arre yaar, destructuring mein '=' ke saath value do.", this.peek());
     }
     this.next();
     const init = this.expression();
     this.semicolon();
-    return {
-      kind: "DestructureDecl",
-      mutable,
-      pattern: { type: isObject ? "object" : "array", names },
-      init,
-      span: this.span(kw),
-    };
+    return { kind: "DestructureDecl", mutable, pattern, init, span: this.span(kw) };
+  }
+
+  /** `{ … }` or `[ … ]` at a binding position. */
+  protected destructurePattern(): ObjectPattern | ArrayPattern {
+    return this.at(TokenKind.LBrace) ? this.objectPattern() : this.arrayPattern();
+  }
+
+  /** Any binding position: a name, or a nested pattern. */
+  protected bindingPattern(): Pattern {
+    if (this.at(TokenKind.LBrace) || this.at(TokenKind.LBracket)) return this.destructurePattern();
+    const name = this.expect(TokenKind.Identifier, "naam");
+    return { kind: "IdentPattern", name: name.value, span: this.span(name) };
+  }
+
+  /** `{ naam, umar: sal, laqab = "sahib", ...baqi }` */
+  protected objectPattern(): ObjectPattern {
+    const open = this.expect(TokenKind.LBrace, "{");
+    const props: ObjectPatternProp[] = [];
+    let rest: string | null = null;
+    if (!this.at(TokenKind.RBrace)) {
+      do {
+        if (this.at(TokenKind.DotDotDot)) {
+          const restTok = this.next();
+          rest = this.expect(TokenKind.Identifier, "naam").value;
+          if (!this.at(TokenKind.RBrace)) {
+            this.fail("Arre yaar, '...' wala naam aakhri hona chahiye.", restTok);
+          }
+          break;
+        }
+        const keyTok = this.expect(TokenKind.Identifier, "property ka naam");
+        // `naam: <pattern>` renames or nests; otherwise the key binds to itself.
+        const value: Pattern = this.match(TokenKind.Colon)
+          ? this.bindingPattern()
+          : { kind: "IdentPattern", name: keyTok.value, span: this.span(keyTok) };
+        const defaultValue = this.match(TokenKind.Assign) ? this.expression() : null;
+        props.push({ key: keyTok.value, value, defaultValue, span: this.span(keyTok) });
+      } while (this.matchListComma(TokenKind.RBrace));
+    }
+    this.expect(TokenKind.RBrace, "}");
+    return { kind: "ObjectPattern", props, rest, span: this.span(open) };
+  }
+
+  /** `[pehla, doosra = 0, ...baqi]` */
+  protected arrayPattern(): ArrayPattern {
+    const open = this.expect(TokenKind.LBracket, "[");
+    const elements: ArrayPatternElement[] = [];
+    let rest: string | null = null;
+    if (!this.at(TokenKind.RBracket)) {
+      do {
+        if (this.at(TokenKind.DotDotDot)) {
+          const restTok = this.next();
+          rest = this.expect(TokenKind.Identifier, "naam").value;
+          if (!this.at(TokenKind.RBracket)) {
+            this.fail("Arre yaar, '...' wala naam aakhri hona chahiye.", restTok);
+          }
+          break;
+        }
+        const start = this.peek();
+        const value = this.bindingPattern();
+        const defaultValue = this.match(TokenKind.Assign) ? this.expression() : null;
+        elements.push({ value, defaultValue, span: this.span(start) });
+      } while (this.matchListComma(TokenKind.RBracket));
+    }
+    this.expect(TokenKind.RBracket, "]");
+    return { kind: "ArrayPattern", elements, rest, span: this.span(open) };
   }
 
   protected tryStmt(): Stmt {

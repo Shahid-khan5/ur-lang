@@ -425,45 +425,7 @@ export class Checker extends ExpressionChecker {
         return;
       case "DestructureDecl": {
         const initType = this.expr(stmt.init);
-        if (stmt.pattern.type === "object") {
-          for (const name of stmt.pattern.names) {
-            let t: Type = KOI;
-            if (initType.kind === "object") {
-              const prop = initType.props.get(name);
-              if (prop === undefined) {
-                this.error(
-                  `Arre yaar, '${typeName(initType)}' mein '${name}' naam ki property nahi hai.`,
-                  stmt.span
-                );
-              } else {
-                t = prop.type;
-              }
-            } else if (initType.kind !== "koi") {
-              this.error(
-                `Arre yaar, '{ }' destructuring object pe chalti hai, '${typeName(initType)}' pe nahi.`,
-                stmt.init.span
-              );
-            }
-            if (!this.declareValue(name, t, stmt.mutable, stmt.span)) {
-              this.error(`Arre yaar, '${name}' pehle se declared hai isi scope mein.`, stmt.span);
-            }
-          }
-        } else {
-          let element: Type = KOI;
-          if (initType.kind === "array") {
-            element = initType.element;
-          } else if (initType.kind !== "koi") {
-            this.error(
-              `Arre yaar, '[ ]' destructuring array pe chalti hai, '${typeName(initType)}' pe nahi.`,
-              stmt.init.span
-            );
-          }
-          for (const name of stmt.pattern.names) {
-            if (!this.declareValue(name, element, stmt.mutable, stmt.span)) {
-              this.error(`Arre yaar, '${name}' pehle se declared hai isi scope mein.`, stmt.span);
-            }
-          }
-        }
+        this.bindPattern(stmt.pattern, initType, stmt.mutable, stmt.init.span);
         return;
       }
       case "DefaultExportStmt": {
@@ -621,6 +583,10 @@ export class Checker extends ExpressionChecker {
     for (const tp of typeParams) fnScope.declareType(tp, typeParam(tp));
     const info = this.paramInfo(params, contextParams);
     for (const b of info.bindings) {
+      if (b.pattern !== null) {
+        this.bindPattern(b.pattern, b.type, true, b.span);
+        continue;
+      }
       if (!this.declareValue(b.name, b.type, true, b.span)) {
         this.error(`Arre yaar, parameter '${b.name}' do dafa likha hai.`, b.span);
       }

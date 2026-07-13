@@ -47,7 +47,16 @@ import {
   widen,
 } from "../types.js";
 import { BUILTIN_TYPES, Binding, KNOWN_GLOBALS, Scope } from "./scope.js";
+import type { Pattern } from "../ast.js";
 import type { CheckOptions, CheckResult, ModuleExports } from "./api.js";
+
+/** One parameter's binding: a plain name, or a destructuring pattern. */
+interface ParamBinding {
+  name: string;
+  pattern: Pattern | null;
+  type: Type;
+  span: Span;
+}
 
 export abstract class CheckerBase {
   readonly diagnostics: UrTypeError[] = [];
@@ -159,10 +168,10 @@ export abstract class CheckerBase {
     types: Type[];
     required: number;
     rest: Type | null;
-    bindings: { name: string; type: Type; span: Span }[];
+    bindings: ParamBinding[];
   } {
     const types: Type[] = [];
-    const bindings: { name: string; type: Type; span: Span }[] = [];
+    const bindings: ParamBinding[] = [];
     let required = 0;
     let sawOptional = false;
     let rest: Type | null = null;
@@ -173,17 +182,17 @@ export abstract class CheckerBase {
       if (p.rest) {
         if (base.kind === "array") {
           rest = base.element;
-          bindings.push({ name: p.name, type: base, span: p.span });
+          bindings.push({ name: p.name, pattern: null, type: base, span: p.span });
         } else if (base.kind === "koi") {
           rest = KOI;
-          bindings.push({ name: p.name, type: arrayOf(KOI), span: p.span });
+          bindings.push({ name: p.name, pattern: null, type: arrayOf(KOI), span: p.span });
         } else {
           this.error(
             `Arre yaar, rest parameter ka type array hona chahiye (jaise adad[]), '${typeName(base)}' nahi.`,
             p.span
           );
           rest = KOI;
-          bindings.push({ name: p.name, type: arrayOf(KOI), span: p.span });
+          bindings.push({ name: p.name, pattern: null, type: arrayOf(KOI), span: p.span });
         }
         continue;
       }
@@ -208,6 +217,8 @@ export abstract class CheckerBase {
       types.push(base);
       bindings.push({
         name: p.name,
+        // A destructured parameter binds a whole pattern, not one name.
+        pattern: p.pattern,
         type: p.optional && p.defaultValue === null ? union([base, KHAALI]) : base,
         span: p.span,
       });
@@ -234,6 +245,99 @@ export abstract class CheckerBase {
     }
     if (assignable(current, valueType)) return valueType;
     return current;
+  }
+
+  /**
+   * Declares every name in a destructuring pattern, typed from `sourceType`.
+   * Handles renaming, defaults (which also drop `khaali` from the type), rest
+   * (`...baqi` keeps the remaining properties / the tail of the array), and
+   * nesting, all recursively.
+   */
+  protected bindPattern(pattern: Pattern, sourceType: Type, mutable: boolean, span: Span): void {
+    if (pattern.kind === "IdentPattern") {
+      if (!this.declareValue(pattern.name, sourceType, mutable, pattern.span)) {
+        this.error(`Arre yaar, '${pattern.name}' pehle se declared hai isi scope mein.`, pattern.span);
+      }
+      return;
+    }
+
+    if (pattern.kind === "ObjectPattern") {
+      if (sourceType.kind !== "object" && sourceType.kind !== "koi") {
+        this.error(
+          `Arre yaar, '{ }' destructuring object pe chalti hai, '${typeName(sourceType)}' pe nahi.`,
+          span
+        );
+      }
+      const taken = new Set<string>();
+      for (const prop of pattern.props) {
+        taken.add(prop.key);
+        let propType: Type = KOI;
+        if (sourceType.kind === "object") {
+          const info = sourceType.props.get(prop.key);
+          if (info === undefined) {
+            this.error(
+              `Arre yaar, '${typeName(sourceType)}' mein '${prop.key}' naam ki property nahi hai.`,
+              prop.span
+            );
+          } else {
+            propType = info.optional ? union([info.type, KHAALI]) : info.type;
+          }
+        }
+        propType = this.applyPatternDefault(propType, prop.defaultValue, prop.span);
+        this.bindPattern(prop.value, propType, mutable, prop.span);
+      }
+      if (pattern.rest !== null) {
+        // `...baqi` keeps exactly the properties nobody else claimed.
+        let restType: Type = KOI;
+        if (sourceType.kind === "object") {
+          const rest = new Map<string, PropInfo>();
+          for (const [key, info] of sourceType.props) {
+            if (!taken.has(key)) rest.set(key, info);
+          }
+          restType = { kind: "object", props: rest };
+        }
+        if (!this.declareValue(pattern.rest, restType, mutable, pattern.span)) {
+          this.error(`Arre yaar, '${pattern.rest}' pehle se declared hai isi scope mein.`, pattern.span);
+        }
+      }
+      return;
+    }
+
+    // ArrayPattern
+    let element: Type = KOI;
+    if (sourceType.kind === "array") {
+      element = sourceType.element;
+    } else if (sourceType.kind !== "koi") {
+      this.error(
+        `Arre yaar, '[ ]' destructuring array pe chalti hai, '${typeName(sourceType)}' pe nahi.`,
+        span
+      );
+    }
+    for (const el of pattern.elements) {
+      const elType = this.applyPatternDefault(element, el.defaultValue, el.span);
+      this.bindPattern(el.value, elType, mutable, el.span);
+    }
+    if (pattern.rest !== null) {
+      const restType = sourceType.kind === "array" ? arrayOf(element) : KOI;
+      if (!this.declareValue(pattern.rest, restType, mutable, pattern.span)) {
+        this.error(`Arre yaar, '${pattern.rest}' pehle se declared hai isi scope mein.`, pattern.span);
+      }
+    }
+  }
+
+  /** A default fills in for an absent value, so it also removes khaali from the type. */
+  private applyPatternDefault(type: Type, defaultValue: Expr | null, span: Span): Type {
+    if (defaultValue === null) return type;
+    const present = this.narrowExclude(type, KHAALI);
+    const target = present.kind === "khaali" || present.kind === "kuchnahi" ? KOI : present;
+    const defaultType = this.exprWithContext(defaultValue, target);
+    if (target.kind !== "koi" && !assignable(target, defaultType)) {
+      this.error(
+        `Arre yaar, default value ka type '${typeName(target)}' hona chahiye, '${typeName(defaultType)}' nahi.`,
+        span
+      );
+    }
+    return target;
   }
 
   /** Notes what a `wapas` actually produced, so an unannotated lambda can infer it. */

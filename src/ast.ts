@@ -61,6 +61,8 @@ export interface Identifier { kind: "Identifier"; name: string; span: Span }
 export interface ArrayLiteral { kind: "ArrayLiteral"; elements: Expr[]; span: Span }
 export type ObjectEntry =
   | { kind: "prop"; key: string; value: Expr; span: Span }
+  /** `{ [k]: v }` — the key is computed at runtime. */
+  | { kind: "computed"; key: Expr; value: Expr; span: Span }
   | { kind: "spread"; argument: Expr; span: Span };
 
 export interface ObjectLiteral {
@@ -258,6 +260,8 @@ export interface ExprStmt { kind: "ExprStmt"; expr: Expr; span: Span }
 
 export interface Param {
   name: string;
+  /** `kaam f({ naam }: Shakhs)` — a destructured parameter; `name` is then unused. */
+  pattern: ObjectPattern | ArrayPattern | null;
   typeAnnotation: TypeNode | null;
   optional: boolean; // `naam?: lafz`
   defaultValue: Expr | null; // `naam: lafz = "x"`
@@ -324,11 +328,49 @@ export interface ImportStmt {
   span: Span;
 }
 
+// ---------- Destructuring patterns ----------
+
+/** A binding position: a plain name, or a nested object/array pattern. */
+export type Pattern = IdentPattern | ObjectPattern | ArrayPattern;
+
+export interface IdentPattern { kind: "IdentPattern"; name: string; span: Span }
+
+/** `{ naam, umar: sal, laqab = "sahib", ...baqi }` */
+export interface ObjectPatternProp {
+  /** The property read from the source object. */
+  key: string;
+  /** Where it is bound — a name, or a nested pattern (`{ a: { b } }`). */
+  value: Pattern;
+  /** `{ n = 7 }` — used when the property is absent. */
+  defaultValue: Expr | null;
+  span: Span;
+}
+export interface ObjectPattern {
+  kind: "ObjectPattern";
+  props: ObjectPatternProp[];
+  /** `...baqi` — collects the properties not named above. */
+  rest: string | null;
+  span: Span;
+}
+
+/** `[pehla, doosra = 0, ...baqi]` */
+export interface ArrayPatternElement {
+  value: Pattern;
+  defaultValue: Expr | null;
+  span: Span;
+}
+export interface ArrayPattern {
+  kind: "ArrayPattern";
+  elements: ArrayPatternElement[];
+  rest: string | null;
+  span: Span;
+}
+
 /** `pakka { naam, umar } = shakhs;` / `rakho [a, b] = jorra;` */
 export interface DestructureDecl {
   kind: "DestructureDecl";
   mutable: boolean;
-  pattern: { type: "object" | "array"; names: string[] };
+  pattern: ObjectPattern | ArrayPattern;
   init: Expr;
   span: Span;
 }

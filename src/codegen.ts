@@ -1,4 +1,4 @@
-import type { Expr, JsxElement, JsxFragment, Program, Span, Stmt } from "./ast.js";
+import type { Expr, JsxElement, JsxFragment, Pattern, Program, Span, Stmt } from "./ast.js";
 import { SourceMapBuilder } from "./sourcemap.js";
 import { cleanJsxText, isIntrinsicTag } from "./jsx.js";
 
@@ -321,9 +321,9 @@ class Codegen {
       case "DestructureDecl": {
         this.indent();
         this.mark(stmt.span);
-        const open = stmt.pattern.type === "object" ? "{ " : "[";
-        const close = stmt.pattern.type === "object" ? " }" : "]";
-        this.write(`${stmt.mutable ? "let" : "const"} ${open}${stmt.pattern.names.join(", ")}${close} = `);
+        this.write(`${stmt.mutable ? "let" : "const"} `);
+        this.pattern(stmt.pattern);
+        this.write(" = ");
         this.expr(stmt.init, 0);
         this.write(";");
         this.newline();
@@ -491,12 +491,58 @@ class Codegen {
     params.forEach((p, i) => {
       if (i > 0) this.write(", ");
       if (p.rest) this.write("...");
-      this.write(p.name);
+      if (p.pattern !== null) this.pattern(p.pattern);
+      else this.write(p.name);
       if (p.defaultValue !== null) {
         this.write(" = ");
         this.expr(p.defaultValue, 0);
       }
     });
+  }
+
+  /** Destructuring patterns emit as themselves — JS has the same syntax. */
+  private pattern(p: Pattern): void {
+    if (p.kind === "IdentPattern") {
+      this.write(p.name);
+      return;
+    }
+    if (p.kind === "ObjectPattern") {
+      this.write("{ ");
+      p.props.forEach((prop, i) => {
+        if (i > 0) this.write(", ");
+        // `{ naam }` when the binding keeps the key's name, else `{ key: <pattern> }`.
+        if (prop.value.kind === "IdentPattern" && prop.value.name === prop.key) {
+          this.write(prop.key);
+        } else {
+          this.write(`${prop.key}: `);
+          this.pattern(prop.value);
+        }
+        if (prop.defaultValue !== null) {
+          this.write(" = ");
+          this.expr(prop.defaultValue, 0);
+        }
+      });
+      if (p.rest !== null) {
+        if (p.props.length > 0) this.write(", ");
+        this.write(`...${p.rest}`);
+      }
+      this.write(" }");
+      return;
+    }
+    this.write("[");
+    p.elements.forEach((el, i) => {
+      if (i > 0) this.write(", ");
+      this.pattern(el.value);
+      if (el.defaultValue !== null) {
+        this.write(" = ");
+        this.expr(el.defaultValue, 0);
+      }
+    });
+    if (p.rest !== null) {
+      if (p.elements.length > 0) this.write(", ");
+      this.write(`...${p.rest}`);
+    }
+    this.write("]");
   }
 
   // ---------- expressions ----------
@@ -537,6 +583,13 @@ class Codegen {
           if (p.kind === "spread") {
             this.write("...");
             this.expr(p.argument, 0);
+            return;
+          }
+          if (p.kind === "computed") {
+            this.write("[");
+            this.expr(p.key, 0);
+            this.write("]: ");
+            this.expr(p.value, 0);
             return;
           }
           this.write(/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.key) ? p.key : JSON.stringify(p.key));

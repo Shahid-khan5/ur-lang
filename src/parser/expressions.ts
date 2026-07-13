@@ -430,6 +430,16 @@ export abstract class ExpressionParser extends ParserBase {
               continue;
             }
             const keyTok = this.peek();
+            // `{ [expr]: value }` — a computed key.
+            if (keyTok.kind === TokenKind.LBracket) {
+              this.next();
+              const computedKey = this.expression();
+              this.expect(TokenKind.RBracket, "]");
+              this.expect(TokenKind.Colon, ":");
+              const value = this.expression();
+              properties.push({ kind: "computed", key: computedKey, value, span: this.span(keyTok) });
+              continue;
+            }
             let key: string;
             if (keyTok.kind === TokenKind.Identifier || keyTok.kind === TokenKind.String) {
               key = keyTok.value;

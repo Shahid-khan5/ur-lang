@@ -175,6 +175,13 @@ export abstract class ExpressionChecker extends CheckerBase {
           this.expr(p.argument);
           continue;
         }
+        if (p.kind === "computed") {
+          // A runtime key could satisfy any property, so no excess/missing check.
+          hasSpread = true;
+          this.expr(p.key);
+          this.expr(p.value);
+          continue;
+        }
         seen.add(p.key);
         const expectedProp = expected.props.get(p.key);
         if (expectedProp === undefined) {
@@ -256,6 +263,19 @@ export abstract class ExpressionChecker extends CheckerBase {
         const props = new Map<string, PropInfo>();
         let unknownSpread = false;
         for (const p of expr.properties) {
+          if (p.kind === "computed") {
+            // `{ [k]: v }` — the key is only known at runtime, so the shape is.
+            const keyType = this.expr(p.key);
+            if (!isString(keyType) && !isNumeric(keyType)) {
+              this.error(
+                `Arre yaar, computed key lafz ya adad honi chahiye, '${typeName(keyType)}' nahi.`,
+                p.key.span
+              );
+            }
+            this.expr(p.value);
+            unknownSpread = true; // the object's exact shape is unknowable
+            continue;
+          }
           if (p.kind === "spread") {
             const spreadType = this.expr(p.argument);
             if (spreadType.kind === "object") {

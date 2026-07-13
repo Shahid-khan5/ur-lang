@@ -4,7 +4,7 @@
 import { tokenize, Comment } from "./lexer.js";
 import { parse } from "./parser.js";
 import { cleanJsxText } from "./jsx.js";
-import type { BlockStmt, Expr, JsxChild, JsxElement, JsxFragment, Param, Stmt, TypeNode } from "./ast.js";
+import type { BlockStmt, Expr, JsxChild, JsxElement, JsxFragment, Param, Pattern, Stmt, TypeNode } from "./ast.js";
 
 const PRECEDENCE: Record<string, number> = {
   "??": 1, "||": 1, "&&": 2, "|": 3, "^": 4, "&": 5,
@@ -104,9 +104,7 @@ class Formatter {
       }
       case "DestructureDecl": {
         const kw = stmt.mutable ? "rakho" : "pakka";
-        const open = stmt.pattern.type === "object" ? "{ " : "[";
-        const close = stmt.pattern.type === "object" ? " }" : "]";
-        this.line(stmt, `${kw} ${open}${stmt.pattern.names.join(", ")}${close} = ${this.expr(stmt.init, 0)};`);
+        this.line(stmt, `${kw} ${this.pattern(stmt.pattern)} = ${this.expr(stmt.init, 0)};`);
         return;
       }
       case "PrintStmt":
@@ -310,9 +308,32 @@ class Formatter {
         const opt = p.optional ? "?" : "";
         const ann = p.typeAnnotation !== null ? `: ${this.type(p.typeAnnotation)}` : "";
         const def = p.defaultValue !== null ? ` = ${this.expr(p.defaultValue, 0)}` : "";
-        return `${rest}${p.name}${opt}${ann}${def}`;
+        const name = p.pattern !== null ? this.pattern(p.pattern) : p.name;
+        return `${rest}${name}${opt}${ann}${def}`;
       })
       .join(", ");
+  }
+
+  /** Destructuring patterns print as they were written. */
+  private pattern(p: Pattern): string {
+    if (p.kind === "IdentPattern") return p.name;
+    if (p.kind === "ObjectPattern") {
+      const parts = p.props.map((prop) => {
+        const binding =
+          prop.value.kind === "IdentPattern" && prop.value.name === prop.key
+            ? prop.key
+            : `${prop.key}: ${this.pattern(prop.value)}`;
+        return prop.defaultValue !== null ? `${binding} = ${this.expr(prop.defaultValue, 0)}` : binding;
+      });
+      if (p.rest !== null) parts.push(`...${p.rest}`);
+      return `{ ${parts.join(", ")} }`;
+    }
+    const parts = p.elements.map((el) => {
+      const binding = this.pattern(el.value);
+      return el.defaultValue !== null ? `${binding} = ${this.expr(el.defaultValue, 0)}` : binding;
+    });
+    if (p.rest !== null) parts.push(`...${p.rest}`);
+    return `[${parts.join(", ")}]`;
   }
 
   // ---------- types ----------
@@ -363,6 +384,7 @@ class Formatter {
         if (e.properties.length === 0) return "{}";
         const parts = e.properties.map((p) => {
           if (p.kind === "spread") return `...${this.expr(p.argument, 0)}`;
+          if (p.kind === "computed") return `[${this.expr(p.key, 0)}]: ${this.expr(p.value, 0)}`;
           const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.key) ? p.key : JSON.stringify(p.key);
           // `{ naam: naam }` prints back as the shorthand `{ naam }`.
           if (p.value.kind === "Identifier" && p.value.name === p.key) return key;
