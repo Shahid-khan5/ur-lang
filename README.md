@@ -58,8 +58,9 @@ npm create urlang my-app -- --template react
 | Types | `adad lafz bool koi khaali kuchnahi`, `T[]`, `A \| B`, `{ k?: T }`, `"literal"`, `Wada<T>` | `number string boolean any null/undefined void`, arrays, unions, objects, literals, `Promise<T>` |
 | Aliases | `qisim Shakhs = { naam: lafz };` | `type Shakhs = { naam: string };` |
 | Print | `bolo a, b;` | `console.log(a, b)` |
-| Branches | `agar / warna agar / warna`, ternary `? :` | `if / else if / else` |
-| Loops | `jab tak (…)`, `har x list mein`, `har i 1 se 10 tak`, `bas`, `agla` | `while`, `for…of`, `for`, `break`, `continue` |
+| Branches | `agar x > 5 { }` / `warna agar` / `warna`, ternary `? :` (condition parens optional) | `if / else if / else` |
+| Loops | `jab tak x > 0 { }`, `har x list mein`, `har i 1 se 10 tak`, `bas`, `agla` | `while`, `for…of`, `for`, `break`, `continue` |
+| Nullish | `naam ?? "mehmaan"`, `x?.y` | `??`, `?.` |
 | Functions | `kaam f<T>(x: T[], y?: adad, z: adad = 1, ...r: adad[]): T` | generics, optional/default/rest params |
 | Lambdas | `kaam (n: adad): adad { wapas n * 2; }` | arrow functions (lexical `yeh`) |
 | Async | `intezar` (auto-`async`) | `await` / `async` |
@@ -80,6 +81,7 @@ Full grammar and typing rules: **[SPEC.md](SPEC.md)**. Design rationale: **[docs
 - **Typed async**: a `kaam` containing `intezar` is automatically `async`; declared return `T` means callers see `Wada<T>`; `intezar` unwraps it.
 - **Cross-module checking**: `lao { jama } "./math.ur" se;` gives `jama` its real exported signature — a bad call in one file is caught when the *importer* compiles.
 - **Classes** compile to native ES classes; instances flow structurally through the type system; `yeh`, constructors, and `buzurg` calls are fully checked.
+- **A typed standard library**: `xs.map(kaam (n) { wapas n * 2; })` is `adad[]`, not `koi[]` — the callback's parameter is typed from context, and an unknown method is a compile error. `koi` stays the deliberate escape hatch.
 - **No emit on type errors**, `==` compiles to `===` (khaali comparisons compile loose to absorb null/undefined), conditions must be `bool` — no truthiness bugs.
 
 ## React, in UrLang

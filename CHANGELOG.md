@@ -12,6 +12,41 @@ UrLang versions the **language** and the **toolchain** together:
 
 Covered by semver: everything in `SPEC.md`, `docs/errors.md` codes, CLI commands, the three package exports, and the shape of `compile()`'s options/result. **Not covered:** compiler internals (direct imports from `dist/` paths other than the documented exports), generated-JS formatting, and the exact text of error messages.
 
+## [1.3.0] — 2026-07-13
+
+A consistency pass over the language surface: places where a construct behaved
+differently from its siblings for no defensible reason.
+
+### Added
+
+- **A typed standard library.** `xs.map(…)`, `s.split(…)`, `xs.find(…)` and the
+  rest are fully typed instead of returning `koi` — a language that calls itself
+  typed cannot hand back `any` the moment you call a built-in method. Arrays,
+  strings, numbers, and bools all have method tables (`src/stdlib.ts`); an
+  unknown method is now an **error**, not a silent `koi`.
+  - **Callback parameters are contextually typed**: `xs.map(kaam (n) { wapas n * 2; })`
+    sees `n` as the element type with no annotation, and the result is `adad[]`.
+  - Unannotated lambdas **infer their return type** from the body.
+  - Callbacks may take fewer parameters than declared (`xs.map(kaam (n) …)`
+    satisfies a `(T, adad) => U` slot), as in JS.
+- **Parentheses around conditions are optional**: `agar x > 5 { … }` and
+  `jab tak x > 0 { … }`. Braces are mandatory, so the parens never disambiguated
+  anything — and `har … mein` never required them. The parenthesized form still
+  parses (they are ordinary grouping parens).
+- **Object shorthand**: `{ naam, umar }` means `{ naam: naam, umar: umar }`.
+- **`bahar` takes a type**: `bahar Bun: { serve: kaam(koi): koi };`. Ambient
+  declarations were the one thing in the language that could not be typed.
+- **Function types are writable**: `kaam(adad, lafz): bool` — the checker had
+  them all along, but there was no syntax to spell one.
+- **`??`** (nullish coalescing), which pairs with the `?.` we already had:
+  `naam ?? "mehmaan"` types as `lafz`, dropping `khaali`.
+- **Numeric literals**: `1_000_000`, `0xff`, `0b1010`, `0o755`.
+
+### Changed
+
+- `checker.ts` and `parser.ts` were split into `src/checker/` and `src/parser/`
+  (core → expressions → statements). The public import paths are unchanged.
+
 ## [1.2.0] — 2026-07-13
 
 ### Added

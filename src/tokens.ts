@@ -86,6 +86,7 @@ export enum TokenKind {
   GtEq,
   AndAnd,
   OrOr,
+  QuestionQuestion, // ?? (nullish coalescing — pairs with ?.)
   Bang,
 }
 

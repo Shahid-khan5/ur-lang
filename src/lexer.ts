@@ -32,6 +32,15 @@ function isDigit(c: number): boolean {
   return c >= Ch.Zero && c <= Ch.Nine;
 }
 
+/** Digit valid in base 2, 8, or 16 (hex accepts a–f in either case). */
+function isRadixDigit(c: number, radix: number): boolean {
+  if (radix === 16) {
+    const lower = c | 0x20;
+    return isDigit(c) || (lower >= 97 && lower <= 102); // a–f
+  }
+  return c >= Ch.Zero && c < Ch.Zero + radix;
+}
+
 function isIdentStart(c: number): boolean {
   return (c >= Ch.LowerA && c <= Ch.LowerZ) || (c >= Ch.UpperA && c <= Ch.UpperZ) || c === Ch.Underscore || c === 36; // $
 }
@@ -401,13 +410,24 @@ export function tokenize(source: string, comments?: Comment[], options?: LexOpti
       continue;
     }
 
-    // Numbers
+    // Numbers: decimals, `1_000_000` separators, and 0x / 0b / 0o radixes.
     if (isDigit(c)) {
+      const radixMark = i + 1 < len ? source.charCodeAt(i + 1) | 0x20 : 0; // lowercased
+      const radix =
+        c !== Ch.Zero ? 0 : radixMark === 120 ? 16 : radixMark === 98 ? 2 : radixMark === 111 ? 8 : 0; // x b o
+      if (radix !== 0) {
+        i += 2;
+        const digitsStart = i;
+        while (i < len && (isRadixDigit(source.charCodeAt(i), radix) || source.charCodeAt(i) === Ch.Underscore)) i++;
+        if (i === digitsStart) fail(`Arre yaar, '${source.slice(start, i)}' ke baad koi digit nahi hai.`, start);
+        push(TokenKind.Number, source.slice(start, i), start);
+        continue;
+      }
       i++;
-      while (i < len && isDigit(source.charCodeAt(i))) i++;
+      while (i < len && (isDigit(source.charCodeAt(i)) || source.charCodeAt(i) === Ch.Underscore)) i++;
       if (i < len && source.charCodeAt(i) === Ch.Dot && i + 1 < len && isDigit(source.charCodeAt(i + 1))) {
         i++;
-        while (i < len && isDigit(source.charCodeAt(i))) i++;
+        while (i < len && (isDigit(source.charCodeAt(i)) || source.charCodeAt(i) === Ch.Underscore)) i++;
       }
       push(TokenKind.Number, source.slice(start, i), start);
       continue;
@@ -526,6 +546,9 @@ export function tokenize(source: string, comments?: Comment[], options?: LexOpti
         if (two === Ch.Dot) {
           i++;
           push(TokenKind.QuestionDot, "?.", start);
+        } else if (two === 63) {
+          i++;
+          push(TokenKind.QuestionQuestion, "??", start);
         } else {
           push(TokenKind.Question, "?", start);
         }

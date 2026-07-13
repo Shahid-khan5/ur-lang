@@ -12,6 +12,7 @@ export interface CodegenOptions {
 
 // Operator precedence, used to insert parentheses only where needed.
 const PRECEDENCE: Record<string, number> = {
+  "??": 1, // JS forbids mixing ?? with &&/|| unparenthesized; we always parenthesize
   "||": 1,
   "&&": 2,
   "==": 3,
@@ -492,7 +493,7 @@ class Codegen {
         const prec = PRECEDENCE[e.op]!;
         const needsParens = prec < parentPrecedence;
         if (needsParens) this.write("(");
-        this.expr(e.left, prec);
+        this.logicalOperand(e.left, e.op, prec);
         // khaali means null-or-undefined, so equality with khaali is loose
         // (x == null matches undefined too); everything else is strict.
         const khaaliCompare =
@@ -502,7 +503,8 @@ class Codegen {
           : e.op === "!=" ? (khaaliCompare ? "!=" : "!==")
           : e.op;
         this.write(` ${jsOp} `);
-        this.expr(e.right, prec + 1); // left-associative: parenthesize equal-precedence right children
+        // left-associative: parenthesize equal-precedence right children
+        this.logicalOperand(e.right, e.op, prec + 1);
         if (needsParens) this.write(")");
         return;
       }
@@ -579,6 +581,25 @@ class Codegen {
         this.jsx(e);
         return;
     }
+  }
+
+  /**
+   * Emits one side of a binary/logical operator. JS rejects `??` mixed with
+   * `&&`/`||` without parentheses (`a ?? b || c` is a SyntaxError), so an
+   * operand that mixes the two families is always parenthesized — our grammar
+   * gives them a defined precedence, and the parens preserve exactly that.
+   */
+  private logicalOperand(operand: Expr, parentOp: string, precedence: number): void {
+    const isNullish = operand.kind === "Logical" && operand.op === "??";
+    const isAndOr = operand.kind === "Logical" && operand.op !== "??";
+    const mixes = parentOp === "??" ? isAndOr : (parentOp === "&&" || parentOp === "||") && isNullish;
+    if (mixes) {
+      this.write("(");
+      this.expr(operand, 0);
+      this.write(")");
+      return;
+    }
+    this.expr(operand, precedence);
   }
 
   // ---------- JSX ----------

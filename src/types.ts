@@ -215,9 +215,12 @@ export function assignable(target: Type, source: Type): boolean {
     }
     case "function": {
       if (source.kind !== "function") return false;
-      if (target.params.length !== source.params.length) return false;
+      // A function may ignore trailing parameters — `xs.map(kaam (n) { … })`
+      // satisfies a `(T, adad) => U` slot. It may not demand *more* than it is
+      // given. Parameters are contravariant, the return type covariant.
+      if (source.params.length > target.params.length) return false;
       return (
-        target.params.every((p, i) => assignable(source.params[i]!, p)) &&
+        source.params.every((p, i) => assignable(p, target.params[i]!)) &&
         assignable(target.returnType, source.returnType)
       );
     }
@@ -236,6 +239,30 @@ export function unify(a: Type, b: Type): Type {
   if (assignable(a, b)) return a; // b is a literal of a, etc.
   if (assignable(b, a)) return b;
   return union([a, b]);
+}
+
+/** True when any of `names` appears anywhere inside `t`. */
+export function mentionsTypeParam(t: Type, names: readonly string[]): boolean {
+  switch (t.kind) {
+    case "typeParam":
+      return names.includes(t.name);
+    case "array":
+      return mentionsTypeParam(t.element, names);
+    case "wada":
+      return mentionsTypeParam(t.value, names);
+    case "union":
+      return t.members.some((m) => mentionsTypeParam(m, names));
+    case "object":
+      return [...t.props.values()].some((p) => mentionsTypeParam(p.type, names));
+    case "function":
+      return (
+        t.params.some((p) => mentionsTypeParam(p, names)) ||
+        (t.restParam !== null && mentionsTypeParam(t.restParam, names)) ||
+        mentionsTypeParam(t.returnType, names)
+      );
+    default:
+      return false;
+  }
 }
 
 /** Replaces type parameters by name throughout a type. */

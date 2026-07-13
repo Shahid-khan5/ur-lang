@@ -17,7 +17,9 @@ export type TypeNode =
       props: { key: string; type: TypeNode; optional: boolean; span: Span }[];
       span: Span;
     }
-  | { kind: "LiteralType"; value: string | number | boolean; span: Span };
+  | { kind: "LiteralType"; value: string | number | boolean; span: Span }
+  /** `kaam(adad, lafz): bool` — a function type, writable wherever a type is. */
+  | { kind: "FunctionType"; params: TypeNode[]; returnType: TypeNode; span: Span };
 
 // ---------- Expressions ----------
 
@@ -71,7 +73,8 @@ export interface Binary {
   right: Expr;
   span: Span;
 }
-export interface Logical { kind: "Logical"; op: "&&" | "||"; left: Expr; right: Expr; span: Span }
+/** `&&`/`||` take bools; `??` takes anything and falls back when the left is khaali. */
+export interface Logical { kind: "Logical"; op: "&&" | "||" | "??"; left: Expr; right: Expr; span: Span }
 export interface Assignment {
   kind: "Assignment";
   op: "=" | "+=" | "-=" | "*=" | "/=" | "%=";
@@ -338,7 +341,7 @@ export interface ForRangeStmt {
   span: Span;
 }
 
-/** `bahar fetch;` — declares an external JS global so the checker allows it (typed koi). */
-export interface ExternDecl { kind: "ExternDecl"; name: string; span: Span }
+/** `bahar fetch;` / `bahar ginti: adad;` — an external JS global; koi when untyped. */
+export interface ExternDecl { kind: "ExternDecl"; name: string; typeAnnotation: TypeNode | null; span: Span }
 
 export interface Program { kind: "Program"; body: Stmt[] }

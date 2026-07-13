@@ -6,7 +6,7 @@ Version 1.1 — covers the syntax and typing rules implemented by the reference 
 
 - **Encoding:** UTF-8 source; identifiers are ASCII `[A-Za-z_$][A-Za-z0-9_$]*`.
 - **Comments:** `// line` and `/* block */`.
-- **Numbers:** decimal integers and decimals (`3`, `3.14`).
+- **Numbers:** decimals (`3`, `3.14`), `_` separators (`1_000_000`), and radix prefixes `0x`, `0b`, `0o`.
 - **Strings:** `"..."` or `'...'` with escapes `\n \t \r \\ \" \' \0`.
 - **Template strings:** `` `text ${expr} text` `` with escapes ``\` \$ \\ \n \t \r``; may span lines.
 - **Reserved words:** `rakho pakka bolo agar warna jab tak bas agla kaam wapas sach jhoot khaali bhejo lao se bahar har mein koshish pakro akhir phenko intezar qisim asal sab jamaat naya yeh waris buzurg`.
@@ -27,8 +27,8 @@ statement      = varDecl | destructureDecl | printStmt | ifStmt | whileStmt
 varDecl        = ("rakho" | "pakka") IDENT [":" type] "=" expr ";" ;
 destructureDecl= ("rakho" | "pakka") ("{" identList "}" | "[" identList "]") "=" expr ";" ;
 printStmt      = "bolo" expr { "," expr } ";" ;
-ifStmt         = "agar" "(" expr ")" block { "warna" "agar" "(" expr ")" block } ["warna" block] ;
-whileStmt      = "jab" "tak" "(" expr ")" block ;
+ifStmt         = "agar" expr block { "warna" "agar" expr block } ["warna" block] ;
+whileStmt      = "jab" "tak" expr block ;                          (* parens optional *)
 forEachStmt    = "har" IDENT expr "mein" block ;
 forRangeStmt   = "har" IDENT expr "se" expr "tak" block ;          (* inclusive *)
 breakStmt      = "bas" ";" ;
@@ -56,8 +56,9 @@ exprStmt       = expr ";" ;
 
 type           = postfixType { "|" postfixType } ;
 postfixType    = primaryType { "[" "]" } ;
-primaryType    = "(" type ")" | objectType | literalType
+primaryType    = "(" type ")" | objectType | literalType | functionType
                | IDENT ["<" type { "," type } ">"] | "khaali" ;
+functionType   = "kaam" "(" [type { "," type }] ")" ":" type ;
 objectType     = "{" [typeProp { "," typeProp }] "}" ;
 typeProp       = IDENT ["?"] ":" type ;
 literalType    = STRING | NUMBER | "sach" | "jhoot" ;
@@ -65,7 +66,8 @@ literalType    = STRING | NUMBER | "sach" | "jhoot" ;
 expr           = assignment ;
 assignment     = conditional [assignOp assignment] ;               (* target: ident/member/index *)
 assignOp       = "=" | "+=" | "-=" | "*=" | "/=" | "%=" ;
-conditional    = logicalOr ["?" assignment ":" assignment] ;
+conditional    = nullish ["?" assignment ":" assignment] ;
+nullish        = logicalOr { "??" logicalOr } ;
 logicalOr      = logicalAnd { "||" logicalAnd } ;
 logicalAnd     = equality { "&&" equality } ;
 equality       = comparison { ("==" | "!=") comparison } ;
@@ -84,7 +86,8 @@ primary        = NUMBER | STRING | template | "sach" | "jhoot" | "khaali"
                | jsxElement ;                                       (* .urx files only *)
 arrayLit       = "[" [arg { "," arg }] "]" ;
 objectLit      = "{" [objEntry { "," objEntry }] "}" ;
-objEntry       = (IDENT | STRING) ":" expr | "..." expr ;
+objEntry       = (IDENT | STRING) ":" expr | IDENT | "..." expr ;  (* `{ naam }` shorthand *)
+externDecl     = "bahar" IDENT [":" type] ";" ;
 
 (* JSX — only in .urx files, where `<` in operand position opens an element. *)
 jsxElement     = "<" JSXNAME { jsxAttr } ("/>" | ">" { jsxChild } "</" JSXNAME ">")
@@ -129,11 +132,13 @@ Within `agar`/ternary branches, a variable's type narrows when the condition is:
 - `- * / % < > <= >=`: adad only.
 - `== !=`: operands must overlap after widening; compiles to `===`/`!==`, except comparisons with `khaali`, which compile to loose `== null` (matching both null and undefined).
 - `&& || !`: bool only. Conditions must be bool — no truthiness.
+- `??`: `a ?? b` is `b` when `a` is khaali. Its type is (`a` minus `khaali`) unified with `b`. Mixing `??` with `&&`/`||` requires explicit parentheses in the emitted JS, which the compiler inserts.
 - `intezar e`: unwraps `Wada<T>` to `T`; non-promises pass through.
 
 ### 3.5 Functions and async
 
-- Unannotated parameters and returns are `koi`. Optional parameters (`?` or default) relax call arity; optional-without-default binds as `T | khaali` in the body. Rest params require an array type.
+- Unannotated parameters and returns are `koi`, **except** where context supplies them: a `kaam (…) { … }` expression passed to a known function slot takes its parameter types from that slot, and an unannotated lambda's return type is inferred from its body. A function may accept fewer parameters than the slot declares.
+- Optional parameters (`?` or default) relax call arity; optional-without-default binds as `T | khaali` in the body. Rest params require an array type.
 - A `kaam` or method whose body contains `intezar` compiles to `async function`; with declared return `T`, callers observe `Wada<T>` (annotating `Wada<T>` directly is equivalent).
 - `wapas` values check against the declared return type; bare `wapas;` requires `kuchnahi`/`koi`/no annotation.
 
@@ -141,11 +146,15 @@ Within `agar`/ternary branches, a variable's type narrows when the condition is:
 
 `jamaat` declares a class: typed fields (with optional initializers), methods, `banao` constructor, `yeh` typed as the instance, single inheritance via `waris` (fields/methods/constructor inherited), `buzurg(...)`/`buzurg.m()` checked against the parent. Instances are structurally typed. No statics/private/interfaces in v1.
 
-### 3.7 Modules
+### 3.7 Built-in methods
+
+Arrays, strings, numbers, and bools carry typed methods (`map`, `filter`, `find`, `reduce`, `push`, `join`, `split`, `toUpperCase`, `toFixed`, …). The element type flows through: `adad[]`'s `map` takes a `kaam(adad, adad): U` and returns `U[]`; `find` returns `T | khaali`. **A method not in the table is an error**, not a silent `koi` — `koi` itself remains the escape hatch, where anything goes.
+
+### 3.8 Modules
 
 `bhejo` exports values, types, classes, defaults (`asal`), and re-exports. `lao` imports named/default (`asal`)/namespace (`sab`) bindings. Cross-module checking gives imports their real exported types when the host (CLI/Vite plugin/LSP) can resolve the file; unresolvable specifiers (npm packages) degrade to `koi`. Ambient `.d.ts` surfaces may inject typed globals. `bahar x;` declares an untyped (`koi`) global. `.ur` and `.urx` modules import each other freely, with types intact in both directions.
 
-### 3.8 JSX (`.urx`)
+### 3.9 JSX (`.urx`)
 
 A JSX expression has type `koi`. A **plain** tag name starting with a lowercase letter, or containing `-`, is **intrinsic**: any attribute name is accepted, but every attribute *expression* is type-checked. Every other tag name — including any **dotted** name, whatever its case — is a **component**, resolved as a value (dotted names via member access) and checked as follows:
 

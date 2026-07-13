@@ -7,7 +7,7 @@ import { cleanJsxText } from "./jsx.js";
 import type { BlockStmt, Expr, JsxChild, JsxElement, JsxFragment, Param, Stmt, TypeNode } from "./ast.js";
 
 const PRECEDENCE: Record<string, number> = {
-  "||": 1, "&&": 2, "==": 3, "!=": 3, "<": 4, ">": 4, "<=": 4, ">=": 4,
+  "??": 1, "||": 1, "&&": 2, "==": 3, "!=": 3, "<": 4, ">": 4, "<=": 4, ">=": 4,
   "+": 5, "-": 5, "*": 6, "/": 6, "%": 6,
 };
 
@@ -191,7 +191,12 @@ class Formatter {
         this.line(stmt, `bhejo asal ${this.expr(stmt.expr, 0)};`);
         return;
       case "ExternDecl":
-        this.line(stmt, `bahar ${stmt.name};`);
+        this.line(
+          stmt,
+          stmt.typeAnnotation === null
+            ? `bahar ${stmt.name};`
+            : `bahar ${stmt.name}: ${this.type(stmt.typeAnnotation)};`
+        );
         return;
       case "TypeAliasDecl":
         this.line(stmt, `${stmt.exported ? "bhejo " : ""}qisim ${stmt.name} = ${this.type(stmt.type)};`);
@@ -276,6 +281,8 @@ class Formatter {
 
   private type(node: TypeNode): string {
     switch (node.kind) {
+      case "FunctionType":
+        return `kaam(${node.params.map((p) => this.type(p)).join(", ")}): ${this.type(node.returnType)}`;
       case "NamedType":
         return node.typeArgs.length > 0
           ? `${node.name}<${node.typeArgs.map((t) => this.type(t)).join(", ")}>`
@@ -316,11 +323,13 @@ class Formatter {
         return `[${e.elements.map((el) => this.expr(el, 0)).join(", ")}]`;
       case "ObjectLiteral": {
         if (e.properties.length === 0) return "{}";
-        const parts = e.properties.map((p) =>
-          p.kind === "spread"
-            ? `...${this.expr(p.argument, 0)}`
-            : `${/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.key) ? p.key : JSON.stringify(p.key)}: ${this.expr(p.value, 0)}`
-        );
+        const parts = e.properties.map((p) => {
+          if (p.kind === "spread") return `...${this.expr(p.argument, 0)}`;
+          const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(p.key) ? p.key : JSON.stringify(p.key);
+          // `{ naam: naam }` prints back as the shorthand `{ naam }`.
+          if (p.value.kind === "Identifier" && p.value.name === p.key) return key;
+          return `${key}: ${this.expr(p.value, 0)}`;
+        });
         return `{ ${parts.join(", ")} }`;
       }
       case "Spread":
