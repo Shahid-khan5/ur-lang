@@ -54,6 +54,8 @@ export abstract class CheckerBase {
   readonly exports: ModuleExports = { values: new Map(), types: new Map(), defaultType: null };
   protected scope = new Scope(null);
   protected loopDepth = 0;
+  /** Labels currently in scope, for `bas naam;` / `agla naam;`. */
+  protected readonly labels: string[] = [];
   /** Stack of enclosing function return types; null entry = no annotation (inferred koi). */
   protected readonly returnTypes: (Type | null)[] = [];
   /** Types actually returned by the function being checked (for lambda inference). */

@@ -202,7 +202,11 @@ export type Stmt =
   | DefaultExportStmt
   | ReExportStmt
   | ForRangeStmt
-  | ClassDecl;
+  | ClassDecl
+  | DoWhileStmt
+  | ForStmt
+  | SwitchStmt
+  | LabeledStmt;
 
 export interface VarDecl {
   kind: "VarDecl";
@@ -225,8 +229,24 @@ export interface IfStmt {
 }
 
 export interface WhileStmt { kind: "WhileStmt"; condition: Expr; body: BlockStmt; span: Span }
-export interface BreakStmt { kind: "BreakStmt"; span: Span }
-export interface ContinueStmt { kind: "ContinueStmt"; span: Span }
+/** `karo { … } jab tak (cond);` → `do { … } while (cond);` — body runs at least once. */
+export interface DoWhileStmt { kind: "DoWhileStmt"; body: BlockStmt; condition: Expr; span: Span }
+/** `har (rakho i = 0; i < n; i++) { … }` → the C-style `for`. */
+export interface ForStmt {
+  kind: "ForStmt";
+  init: Stmt | null;
+  condition: Expr | null;
+  step: Expr | null;
+  body: BlockStmt;
+  span: Span;
+}
+/** `chuno (x) { surat 1: … bas; warna: … }` → `switch`. Cases fall through, as in JS. */
+export interface SwitchCase { test: Expr | null; body: Stmt[]; span: Span } // test === null → warna (default)
+export interface SwitchStmt { kind: "SwitchStmt"; discriminant: Expr; cases: SwitchCase[]; span: Span }
+/** `naam: har … { … bas naam; }` — a labelled loop. */
+export interface LabeledStmt { kind: "LabeledStmt"; label: string; body: Stmt; span: Span }
+export interface BreakStmt { kind: "BreakStmt"; label: string | null; span: Span }
+export interface ContinueStmt { kind: "ContinueStmt"; label: string | null; span: Span }
 export interface BlockStmt {
   kind: "BlockStmt";
   body: Stmt[];

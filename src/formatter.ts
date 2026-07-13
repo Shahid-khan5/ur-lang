@@ -153,10 +153,46 @@ class Formatter {
         );
         return;
       case "BreakStmt":
-        this.line(stmt, "bas;");
+        this.line(stmt, stmt.label === null ? "bas;" : `bas ${stmt.label};`);
         return;
       case "ContinueStmt":
-        this.line(stmt, "agla;");
+        this.line(stmt, stmt.label === null ? "agla;" : `agla ${stmt.label};`);
+        return;
+      case "DoWhileStmt":
+        this.emit("karo {");
+        this.lastSourceLine = stmt.span.line;
+        this.indentLevel++;
+        this.statements(stmt.body.body, stmt.body.endLine ?? Infinity);
+        this.indentLevel--;
+        this.emit(`} jab tak (${this.expr(stmt.condition, 0)});`);
+        return;
+      case "ForStmt": {
+        const init = stmt.init === null ? ";" : this.inlineStmt(stmt.init);
+        const cond = stmt.condition === null ? "" : this.expr(stmt.condition, 0);
+        const step = stmt.step === null ? "" : this.expr(stmt.step, 0);
+        this.blockish(stmt, `har (${init} ${cond}; ${step}) {`, stmt.body);
+        return;
+      }
+      case "SwitchStmt": {
+        this.emit(`chuno (${this.expr(stmt.discriminant, 0)}) {`);
+        this.lastSourceLine = stmt.span.line;
+        this.indentLevel++;
+        for (const c of stmt.cases) {
+          this.flushComments(c.span.line);
+          this.emit(c.test === null ? "warna:" : `surat ${this.expr(c.test, 0)}:`);
+          this.lastSourceLine = c.span.line;
+          this.indentLevel++;
+          this.statements(c.body, Infinity);
+          this.indentLevel--;
+        }
+        this.indentLevel--;
+        this.emit("}");
+        return;
+      }
+      case "LabeledStmt":
+        this.emit(`${stmt.label}:`);
+        this.lastSourceLine = stmt.span.line;
+        this.stmt(stmt.body);
         return;
       case "BlockStmt":
         this.emit("{");

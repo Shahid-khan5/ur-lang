@@ -237,10 +237,79 @@ export class Checker extends ExpressionChecker {
         this.loopDepth--;
         return;
       }
+      case "DoWhileStmt": {
+        // The body runs before the condition is ever evaluated, so no narrowing.
+        this.loopDepth++;
+        this.blockInNewScope(stmt.body);
+        this.loopDepth--;
+        this.condition(stmt.condition);
+        return;
+      }
+      case "ForStmt": {
+        // init/condition/step share a scope with the body, so `i` is not visible
+        // after the loop.
+        const outer = this.scope;
+        this.scope = new Scope(outer);
+        if (stmt.init !== null) this.stmt(stmt.init);
+        if (stmt.condition !== null) this.condition(stmt.condition);
+        if (stmt.step !== null) this.expr(stmt.step);
+        this.loopDepth++;
+        this.blockInNewScope(stmt.body);
+        this.loopDepth--;
+        this.scope = outer;
+        return;
+      }
+      case "SwitchStmt": {
+        const discriminant = this.expr(stmt.discriminant);
+        // `bas` inside a chuno breaks out of it, exactly as in JS.
+        this.loopDepth++;
+        for (const c of stmt.cases) {
+          if (c.test !== null) {
+            const caseType = this.expr(c.test);
+            const wide = widen(discriminant);
+            if (!assignable(wide, caseType) && !assignable(widen(caseType), wide)) {
+              this.error(
+                `Arre yaar, '${typeName(caseType)}' aur '${typeName(discriminant)}' kabhi barabar nahi ho sakte.`,
+                c.test.span
+              );
+            }
+          }
+          const outer = this.scope;
+          this.scope = new Scope(outer);
+          // Inside a case, the discriminant is known to equal the case value.
+          if (c.test !== null) {
+            const fact = this.equalityFact(stmt.discriminant, c.test);
+            if (fact !== null) this.scope.shadow(fact[0], this.narrowTo(fact[1], fact[2]));
+          }
+          this.hoistDeclarations(c.body, this.scope);
+          for (const s of c.body) this.stmt(s);
+          this.scope = outer;
+        }
+        this.loopDepth--;
+        return;
+      }
+      case "LabeledStmt": {
+        this.labels.push(stmt.label);
+        this.stmt(stmt.body);
+        this.labels.pop();
+        return;
+      }
       case "BreakStmt":
+        if (stmt.label !== null) {
+          if (!this.labels.includes(stmt.label)) {
+            this.error(`Arre yaar, '${stmt.label}' naam ka koi label nahi hai.`, stmt.span);
+          }
+          return;
+        }
         if (this.loopDepth === 0) this.error("Arre yaar, 'bas' sirf loop ke andar chalta hai.", stmt.span);
         return;
       case "ContinueStmt":
+        if (stmt.label !== null) {
+          if (!this.labels.includes(stmt.label)) {
+            this.error(`Arre yaar, '${stmt.label}' naam ka koi label nahi hai.`, stmt.span);
+          }
+          return;
+        }
         if (this.loopDepth === 0) this.error("Arre yaar, 'agla' sirf loop ke andar chalta hai.", stmt.span);
         return;
       case "BlockStmt":

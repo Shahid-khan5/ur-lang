@@ -112,6 +112,9 @@ export enum TokenKind {
   Hai, // instanceof
   Andar, // in
   Mitao, // delete
+  Chuno, // switch
+  Surat, // case
+  Karo, // do (do…while)
   /** A regex literal, e.g. /ab+c/gi — value holds the whole literal. */
   Regex,
   /** `?.(` — optional call */
@@ -168,4 +171,7 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ["hai", TokenKind.Hai],
   ["andar", TokenKind.Andar],
   ["mitao", TokenKind.Mitao],
+  ["chuno", TokenKind.Chuno],
+  ["surat", TokenKind.Surat],
+  ["karo", TokenKind.Karo],
 ]);

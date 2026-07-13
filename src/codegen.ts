@@ -170,14 +170,82 @@ class Codegen {
       case "BreakStmt":
         this.indent();
         this.mark(stmt.span);
-        this.write("break;");
+        this.write(stmt.label === null ? "break;" : `break ${stmt.label};`);
         this.newline();
         return;
       case "ContinueStmt":
         this.indent();
         this.mark(stmt.span);
-        this.write("continue;");
+        this.write(stmt.label === null ? "continue;" : `continue ${stmt.label};`);
         this.newline();
+        return;
+      case "DoWhileStmt":
+        this.indent();
+        this.mark(stmt.span);
+        this.write("do {");
+        this.newline();
+        this.body(stmt.body.body);
+        this.indent();
+        this.write("} while (");
+        this.expr(stmt.condition, 0);
+        this.write(");");
+        this.newline();
+        return;
+      case "ForStmt": {
+        this.indent();
+        this.mark(stmt.span);
+        this.write("for (");
+        if (stmt.init !== null) {
+          // The init is a statement (`rakho i = 0;`); emit it inline, without
+          // its indentation or trailing newline.
+          this.write(this.inlineStmt(stmt.init));
+        } else {
+          this.write(";");
+        }
+        this.write(" ");
+        if (stmt.condition !== null) this.expr(stmt.condition, 0);
+        this.write("; ");
+        if (stmt.step !== null) this.expr(stmt.step, 0);
+        this.write(") {");
+        this.newline();
+        this.body(stmt.body.body);
+        this.indent();
+        this.write("}");
+        this.newline();
+        return;
+      }
+      case "SwitchStmt": {
+        this.indent();
+        this.mark(stmt.span);
+        this.write("switch (");
+        this.expr(stmt.discriminant, 0);
+        this.write(") {");
+        this.newline();
+        this.indentLevel++;
+        for (const c of stmt.cases) {
+          this.indent();
+          if (c.test === null) {
+            this.write("default:");
+          } else {
+            this.write("case ");
+            this.expr(c.test, 0);
+            this.write(":");
+          }
+          this.newline();
+          this.body(c.body);
+        }
+        this.indentLevel--;
+        this.indent();
+        this.write("}");
+        this.newline();
+        return;
+      }
+      case "LabeledStmt":
+        this.indent();
+        this.mark(stmt.span);
+        this.write(`${stmt.label}:`);
+        this.newline();
+        this.stmt(stmt.body);
         return;
       case "BlockStmt":
         this.indent();
@@ -399,6 +467,17 @@ class Codegen {
     this.indentLevel++;
     for (const s of stmts) this.stmt(s);
     this.indentLevel--;
+  }
+
+  /** Renders a statement on one line — for a `for (…;…;…)` header. */
+  private inlineStmt(stmt: Stmt): string {
+    const savedOut = this.out.length;
+    const savedIndent = this.indentLevel;
+    this.indentLevel = 0;
+    this.stmt(stmt);
+    const rendered = this.out.splice(savedOut).join("").trim();
+    this.indentLevel = savedIndent;
+    return rendered;
   }
 
   private rewriteSource(source: string): string {

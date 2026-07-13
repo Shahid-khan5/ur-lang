@@ -54,13 +54,31 @@ export class Parser extends ExpressionParser {
         return this.whileStmt();
       case TokenKind.Bas: {
         this.next();
+        const label = this.at(TokenKind.Identifier) ? this.next().value : null;
         this.semicolon();
-        return { kind: "BreakStmt", span: this.span(t) };
+        return { kind: "BreakStmt", label, span: this.span(t) };
       }
       case TokenKind.Agla: {
         this.next();
+        const label = this.at(TokenKind.Identifier) ? this.next().value : null;
         this.semicolon();
-        return { kind: "ContinueStmt", span: this.span(t) };
+        return { kind: "ContinueStmt", label, span: this.span(t) };
+      }
+      case TokenKind.Chuno:
+        return this.switchStmt();
+      case TokenKind.Karo:
+        return this.doWhileStmt();
+      case TokenKind.Identifier: {
+        // `naam: <loop>` — a label. (Nothing else starts with `IDENT :`.)
+        if (this.tokens[this.i + 1]!.kind === TokenKind.Colon) {
+          this.next();
+          this.next();
+          return { kind: "LabeledStmt", label: t.value, body: this.statement(), span: this.span(t) };
+        }
+        // Otherwise it is an ordinary expression statement.
+        const expr = this.expression();
+        this.semicolon();
+        return { kind: "ExprStmt", expr, span: this.span(t) };
       }
       case TokenKind.Kaam:
         return this.functionDecl(false, false);
@@ -327,8 +345,77 @@ export class Parser extends ExpressionParser {
     };
   }
 
+  /** `chuno (x) { surat a: … bas; warna: … }` — JS switch, fallthrough and all. */
+  protected switchStmt(): Stmt {
+    const kw = this.expect(TokenKind.Chuno, "chuno");
+    this.expect(TokenKind.LParen, "(");
+    const discriminant = this.expression();
+    this.expect(TokenKind.RParen, ")");
+    this.expect(TokenKind.LBrace, "{");
+    const cases: import("../ast.js").SwitchCase[] = [];
+    let sawDefault = false;
+    while (!this.at(TokenKind.RBrace)) {
+      if (this.at(TokenKind.EOF)) {
+        this.fail("Arre yaar, 'chuno' band karna bhool gaye — '}' nahi mila.", this.peek());
+      }
+      const caseTok = this.peek();
+      let test: Expr | null = null;
+      if (this.match(TokenKind.Surat) !== null) {
+        test = this.expression();
+      } else if (this.match(TokenKind.Warna) !== null) {
+        if (sawDefault) this.fail("Arre yaar, 'chuno' mein ek hi 'warna' ho sakta hai.", caseTok);
+        sawDefault = true;
+      } else {
+        this.fail("Arre yaar, 'chuno' ke andar 'surat <value>:' ya 'warna:' aana chahiye.", caseTok);
+      }
+      this.expect(TokenKind.Colon, ":");
+      const body: Stmt[] = [];
+      while (!this.at(TokenKind.Surat) && !this.at(TokenKind.Warna) && !this.at(TokenKind.RBrace)) {
+        if (this.at(TokenKind.EOF)) {
+          this.fail("Arre yaar, 'chuno' band karna bhool gaye — '}' nahi mila.", this.peek());
+        }
+        body.push(this.statement());
+      }
+      cases.push({ test, body, span: this.span(caseTok) });
+    }
+    this.expect(TokenKind.RBrace, "}");
+    return { kind: "SwitchStmt", discriminant, cases, span: this.span(kw) };
+  }
+
+  /** `karo { … } jab tak (cond);` — the body runs at least once. */
+  protected doWhileStmt(): Stmt {
+    const kw = this.expect(TokenKind.Karo, "karo");
+    const body = this.block();
+    if (!this.at(TokenKind.Jab)) {
+      this.fail("Arre yaar, 'karo { ... }' ke baad 'jab tak (shart);' aana chahiye.", this.peek());
+    }
+    this.next();
+    if (!this.at(TokenKind.Tak)) {
+      this.fail("Arre yaar, 'jab' ke baad 'tak' aana chahiye.", this.peek());
+    }
+    this.next();
+    this.expect(TokenKind.LParen, "(");
+    const condition = this.expression();
+    this.expect(TokenKind.RParen, ")");
+    this.semicolon();
+    return { kind: "DoWhileStmt", body, condition, span: this.span(kw) };
+  }
+
   protected forEachStmt(): Stmt {
     const kw = this.next(); // har
+    // `har (init; cond; step) { … }` — the C-style loop, told apart from the
+    // other two `har` forms by the parenthesis.
+    if (this.at(TokenKind.LParen)) {
+      this.next();
+      const init = this.at(TokenKind.Semicolon) ? null : this.statement(); // consumes its own `;`
+      if (init === null) this.next();
+      const condition = this.at(TokenKind.Semicolon) ? null : this.expression();
+      this.expect(TokenKind.Semicolon, ";");
+      const step = this.at(TokenKind.RParen) ? null : this.expression();
+      this.expect(TokenKind.RParen, ")");
+      const body = this.block();
+      return { kind: "ForStmt", init, condition, step, body, span: this.span(kw) };
+    }
     const name = this.expect(TokenKind.Identifier, "loop variable ka naam");
     const first = this.expression();
     if (this.match(TokenKind.Se)) {

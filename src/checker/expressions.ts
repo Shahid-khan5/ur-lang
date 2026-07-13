@@ -122,10 +122,21 @@ export abstract class ExpressionChecker extends CheckerBase {
       return this.functionExprWithContext(expr, expected);
     }
     if (expected.kind === "union") {
-      // Pick the sole object/array member as context if unambiguous.
       if (expr.kind === "ObjectLiteral") {
         const objects = expected.members.filter((m) => m.kind === "object");
         if (objects.length === 1) return this.exprWithContext(expr, objects[0]!);
+        // Several candidates (a discriminated union, typically): try each one
+        // quietly and take the first that fits. Without this, the literal is
+        // checked with no context at all — its discriminant widens to lafz and
+        // nothing in the union matches.
+        for (const candidate of objects) {
+          const fits = this.silently(() => {
+            const before = this.diagnostics.length;
+            this.exprWithContext(expr, candidate);
+            return this.diagnostics.length === before;
+          });
+          if (fits) return this.exprWithContext(expr, candidate);
+        }
       }
       if (expr.kind === "ArrayLiteral") {
         const arrays = expected.members.filter((m) => m.kind === "array");
