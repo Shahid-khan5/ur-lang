@@ -7,8 +7,10 @@ import { cleanJsxText } from "./jsx.js";
 import type { BlockStmt, Expr, JsxChild, JsxElement, JsxFragment, Param, Stmt, TypeNode } from "./ast.js";
 
 const PRECEDENCE: Record<string, number> = {
-  "??": 1, "||": 1, "&&": 2, "==": 3, "!=": 3, "<": 4, ">": 4, "<=": 4, ">=": 4,
-  "+": 5, "-": 5, "*": 6, "/": 6, "%": 6,
+  "??": 1, "||": 1, "&&": 2, "|": 3, "^": 4, "&": 5,
+  "==": 6, "!=": 6, "<": 7, ">": 7, "<=": 7, ">=": 7, hai: 7, andar: 7,
+  "<<": 8, ">>": 8, ">>>": 8,
+  "+": 9, "-": 9, "*": 10, "/": 10, "%": 10, "**": 11,
 };
 
 class Formatter {
@@ -343,7 +345,8 @@ class Formatter {
         return out + "`";
       }
       case "Unary": {
-        const inner = `${e.op}${this.expr(e.operand, 7)}`;
+        const spaced = e.op.length > 1; // `noeyat x`
+        const inner = `${e.op}${spaced ? " " : ""}${this.expr(e.operand, 7)}`;
         return parentPrecedence > 7 ? `(${inner})` : inner;
       }
       case "Await": {
@@ -365,7 +368,7 @@ class Formatter {
         return parentPrecedence > 0 ? `(${text})` : text;
       }
       case "Call":
-        return `${this.expr(e.callee, 8)}(${e.args.map((a) => this.expr(a, 0)).join(", ")})`;
+        return `${this.expr(e.callee, 8)}${e.optional ? "?.(" : "("}${e.args.map((a) => this.expr(a, 0)).join(", ")})`;
       case "NewExpr":
         return `naya ${e.className}(${e.args.map((a) => this.expr(a, 0)).join(", ")})`;
       case "SuperCall":
@@ -375,7 +378,15 @@ class Formatter {
       case "Member":
         return `${this.expr(e.object, 8)}${e.optional ? "?." : "."}${e.property}`;
       case "Index":
-        return `${this.expr(e.object, 8)}[${this.expr(e.index, 0)}]`;
+        return `${this.expr(e.object, 8)}${e.optional ? "?.[" : "["}${this.expr(e.index, 0)}]`;
+      case "Update":
+        return e.prefix
+          ? `${e.op}${this.expr(e.target, 8)}`
+          : `${this.expr(e.target, 8)}${e.op}`;
+      case "DeleteExpr":
+        return `mitao ${this.expr(e.target, 7)}`;
+      case "RegexLiteral":
+        return e.raw;
       case "FunctionExpr": {
         const ret = e.returnType !== null ? `: ${this.type(e.returnType)}` : "";
         // Function expression bodies format on one line when short, else keep

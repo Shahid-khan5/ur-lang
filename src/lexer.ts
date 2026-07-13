@@ -306,6 +306,39 @@ export function tokenize(source: string, comments?: Comment[], options?: LexOpti
     return prev === undefined || !OPERAND_ENDERS.has(prev.kind);
   };
 
+  /** Same operand-position rule decides `/` : regex literal vs division. */
+  const canStartRegex = (): boolean => {
+    const prev = tokens[tokens.length - 1];
+    return prev === undefined || !OPERAND_ENDERS.has(prev.kind);
+  };
+
+  /**
+   * Scans `/pattern/flags` with `i` just past the opening slash. The pattern is
+   * kept verbatim (it is emitted as-is), honouring escapes and character
+   * classes — `/[/]/` and `/a\/b/` both terminate at the right slash.
+   */
+  const scanRegex = (start: number): void => {
+    let inClass = false;
+    while (i < len) {
+      const c = source.charCodeAt(i);
+      if (c === Ch.Newline) break; // unterminated: regexes never span lines
+      if (c === Ch.Backslash) {
+        i += 2;
+        continue;
+      }
+      if (c === 91) inClass = true; // [
+      else if (c === 93) inClass = false; // ]
+      else if (c === Ch.Slash && !inClass) {
+        i++;
+        while (i < len && isIdentPart(source.charCodeAt(i))) i++; // flags
+        push(TokenKind.Regex, source.slice(start, i), start);
+        return;
+      }
+      i++;
+    }
+    fail("Arre yaar, regex band karna bhool gaye — closing '/' nahi mila.", start);
+  };
+
   while (i < len) {
     // JSX contexts lex with their own scanners.
     const top = ctx[ctx.length - 1];
@@ -500,16 +533,32 @@ export function tokenize(source: string, comments?: Comment[], options?: LexOpti
         }
         continue;
       case 43: // +
-        if (two === 61) { i++; push(TokenKind.PlusAssign, "+=", start); } else push(TokenKind.Plus, "+", start);
+        if (two === 61) { i++; push(TokenKind.PlusAssign, "+=", start); }
+        else if (two === 43) { i++; push(TokenKind.PlusPlus, "++", start); }
+        else push(TokenKind.Plus, "+", start);
         continue;
       case Ch.Minus:
-        if (two === 61) { i++; push(TokenKind.MinusAssign, "-=", start); } else push(TokenKind.Minus, "-", start);
+        if (two === 61) { i++; push(TokenKind.MinusAssign, "-=", start); }
+        else if (two === Ch.Minus) { i++; push(TokenKind.MinusMinus, "--", start); }
+        else push(TokenKind.Minus, "-", start);
         continue;
       case Ch.Star:
-        if (two === 61) { i++; push(TokenKind.StarAssign, "*=", start); } else push(TokenKind.Star, "*", start);
+        if (two === Ch.Star) {
+          i++;
+          if (i < len && source.charCodeAt(i) === 61) { i++; push(TokenKind.StarStarAssign, "**=", start); }
+          else push(TokenKind.StarStar, "**", start);
+        } else if (two === 61) { i++; push(TokenKind.StarAssign, "*=", start); }
+        else push(TokenKind.Star, "*", start);
         continue;
       case Ch.Slash:
-        if (two === 61) { i++; push(TokenKind.SlashAssign, "/=", start); } else push(TokenKind.Slash, "/", start);
+        if (two === 61) { i++; push(TokenKind.SlashAssign, "/=", start); continue; }
+        // `/` in operand position starts a regex literal; otherwise it divides.
+        // (Comments were already consumed above.)
+        if (canStartRegex()) {
+          scanRegex(start);
+          continue;
+        }
+        push(TokenKind.Slash, "/", start);
         continue;
       case 37: // %
         if (two === 61) { i++; push(TokenKind.PercentAssign, "%=", start); } else push(TokenKind.Percent, "%", start);
@@ -529,23 +578,51 @@ export function tokenize(source: string, comments?: Comment[], options?: LexOpti
           push(TokenKind.Lt, "<", start);
           continue;
         }
-        if (two === 61) { i++; push(TokenKind.LtEq, "<=", start); } else push(TokenKind.Lt, "<", start);
+        if (two === 61) { i++; push(TokenKind.LtEq, "<=", start); }
+        else if (two === Ch.Lt) {
+          i++;
+          if (i < len && source.charCodeAt(i) === 61) { i++; push(TokenKind.ShlAssign, "<<=", start); }
+          else push(TokenKind.Shl, "<<", start);
+        } else push(TokenKind.Lt, "<", start);
         continue;
       case Ch.Gt:
-        if (two === 61) { i++; push(TokenKind.GtEq, ">=", start); } else push(TokenKind.Gt, ">", start);
+        if (two === 61) { i++; push(TokenKind.GtEq, ">=", start); continue; }
+        if (two === Ch.Gt) {
+          i++;
+          if (i < len && source.charCodeAt(i) === Ch.Gt) {
+            i++;
+            if (i < len && source.charCodeAt(i) === 61) { i++; push(TokenKind.UShrAssign, ">>>=", start); }
+            else push(TokenKind.UShr, ">>>", start);
+          } else if (i < len && source.charCodeAt(i) === 61) { i++; push(TokenKind.ShrAssign, ">>=", start); }
+          else push(TokenKind.Shr, ">>", start);
+          continue;
+        }
+        push(TokenKind.Gt, ">", start);
         continue;
       case 38: // &
         if (two === 38) { i++; push(TokenKind.AndAnd, "&&", start); continue; }
-        fail("Arre yaar, akela '&' samajh nahi aaya — '&&' likhna tha kya?", start);
+        if (two === 61) { i++; push(TokenKind.AmpAssign, "&=", start); continue; }
+        push(TokenKind.Amp, "&", start);
         continue;
       case 124: // |
         if (two === 124) { i++; push(TokenKind.OrOr, "||", start); continue; }
+        if (two === 61) { i++; push(TokenKind.PipeAssign, "|=", start); continue; }
         push(TokenKind.Pipe, "|", start);
+        continue;
+      case 94: // ^
+        if (two === 61) { i++; push(TokenKind.CaretAssign, "^=", start); } else push(TokenKind.Caret, "^", start);
+        continue;
+      case 126: // ~
+        push(TokenKind.Tilde, "~", start);
         continue;
       case 63: // ?
         if (two === Ch.Dot) {
           i++;
-          push(TokenKind.QuestionDot, "?.", start);
+          // `?.(` and `?.[` are optional call / optional index.
+          const after = i < len ? source.charCodeAt(i) : 0;
+          if (after === 40) { i++; push(TokenKind.QuestionDotLParen, "?.(", start); }
+          else if (after === 91) { i++; push(TokenKind.QuestionDotLBracket, "?.[", start); }
+          else push(TokenKind.QuestionDot, "?.", start);
         } else if (two === 63) {
           i++;
           push(TokenKind.QuestionQuestion, "??", start);

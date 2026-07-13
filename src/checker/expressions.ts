@@ -266,9 +266,10 @@ export abstract class ExpressionChecker extends CheckerBase {
       }
       case "Unary": {
         const t = this.expr(expr.operand);
-        if (expr.op === "-") {
+        if (expr.op === "noeyat") return LAFZ; // `noeyat x` works on anything
+        if (expr.op === "-" || expr.op === "~") {
           if (!isNumeric(t)) {
-            this.error(`Arre yaar, '-' sirf adad pe chalta hai, '${typeName(t)}' pe nahi.`, expr.span);
+            this.error(`Arre yaar, '${expr.op}' sirf adad pe chalta hai, '${typeName(t)}' pe nahi.`, expr.span);
           }
           return ADAD;
         }
@@ -277,6 +278,23 @@ export abstract class ExpressionChecker extends CheckerBase {
         }
         return BOOL;
       }
+      case "Update": {
+        const t = this.expr(expr.target);
+        if (!isNumeric(t)) {
+          this.error(
+            `Arre yaar, '${expr.op}' sirf adad pe chalta hai, '${typeName(t)}' pe nahi.`,
+            expr.span
+          );
+        }
+        // Same rules as an assignment: the target must be assignable and mutable.
+        this.assignTarget(expr.target);
+        return ADAD;
+      }
+      case "DeleteExpr":
+        this.expr(expr.target);
+        return BOOL;
+      case "RegexLiteral":
+        return KOI; // a RegExp; its methods stay koi
       case "Binary": {
         const left = this.expr(expr.left);
         const right = this.expr(expr.right);
@@ -300,6 +318,13 @@ export abstract class ExpressionChecker extends CheckerBase {
           case "*":
           case "/":
           case "%":
+          case "**":
+          case "&":
+          case "|":
+          case "^":
+          case "<<":
+          case ">>":
+          case ">>>":
             this.expectNumericPair(left, right, expr.op, expr.span);
             return ADAD;
           case "<":
@@ -307,6 +332,30 @@ export abstract class ExpressionChecker extends CheckerBase {
           case "<=":
           case ">=":
             this.expectNumericPair(left, right, expr.op, expr.span);
+            return BOOL;
+          case "hai":
+            // `x hai Shakhs` — the right side names a jamaat (or a koi class).
+            if (right.kind !== "class" && right.kind !== "koi") {
+              this.error(
+                `Arre yaar, 'hai' ke daayen taraf jamaat honi chahiye, '${typeName(right)}' nahi.`,
+                expr.right.span
+              );
+            }
+            return BOOL;
+          case "andar":
+            // `"a" andar o` — key on the left, object on the right.
+            if (!isString(left) && !isNumeric(left)) {
+              this.error(
+                `Arre yaar, 'andar' ke baayen taraf lafz ya adad hona chahiye, '${typeName(left)}' nahi.`,
+                expr.left.span
+              );
+            }
+            if (right.kind !== "object" && right.kind !== "koi" && right.kind !== "class") {
+              this.error(
+                `Arre yaar, 'andar' ke daayen taraf object hona chahiye, '${typeName(right)}' nahi.`,
+                expr.right.span
+              );
+            }
             return BOOL;
           case "==":
           case "!=": {
@@ -378,96 +427,9 @@ export abstract class ExpressionChecker extends CheckerBase {
         return targetType;
       }
       case "Call": {
-        const calleeType = this.expr(expr.callee);
-        const checkArgsLoosely = (): void => {
-          for (const a of expr.args) {
-            if (a.kind === "Spread") this.expr(a.argument);
-            else this.expr(a);
-          }
-        };
-        if (calleeType.kind === "koi") {
-          checkArgsLoosely();
-          return KOI;
-        }
-        if (calleeType.kind !== "function") {
-          checkArgsLoosely();
-          this.error(`Arre yaar, '${typeName(calleeType)}' ko call nahi kar sakte — yeh kaam nahi hai.`, expr.span);
-          return KOI;
-        }
-        const hasSpread = expr.args.some((a) => a.kind === "Spread");
-        if (!hasSpread) {
-          const min = calleeType.requiredParams;
-          const max = calleeType.restParam !== null ? Infinity : calleeType.params.length;
-          if (expr.args.length < min || expr.args.length > max) {
-            for (const a of expr.args) this.expr(a);
-            const want =
-              min === max ? `${min}` : max === Infinity ? `kam az kam ${min}` : `${min} se ${max}`;
-            this.error(
-              `Arre yaar, is kaam ko ${want} argument chahiye, ${expr.args.length} diye.`,
-              expr.span
-            );
-            return calleeType.returnType;
-          }
-        }
-        if (calleeType.typeParams.length > 0) {
-          // Generic call: type the arguments *in context* first (a lambda needs
-          // its parameter types — `xs.map(kaam (n) { … })` must see n: T, whose
-          // T is already concrete even though the result type U is not), then
-          // infer the type arguments from what came back.
-          const argTypes = expr.args.map((a, i) => {
-            if (a.kind === "Spread") return this.expr(a.argument);
-            const declared = i < calleeType.params.length ? calleeType.params[i]! : calleeType.restParam;
-            // Only a lambda gets context here, and only when the parameter types
-            // it would inherit are already concrete. Checking, say, `[1, 2, 3]`
-            // against an uninstantiated `T[]` would reject perfectly good code.
-            const usable =
-              declared !== null &&
-              a.kind === "FunctionExpr" &&
-              declared.kind === "function" &&
-              !declared.params.some((p) => mentionsTypeParam(p, calleeType.typeParams));
-            return usable ? this.exprWithContext(a, declared) : this.expr(a);
-          });
-          const subst = inferTypeArguments(calleeType.typeParams, calleeType.params, argTypes);
-          for (let i = 0; i < argTypes.length; i++) {
-            if (expr.args[i]!.kind === "Spread") continue;
-            const declared = i < calleeType.params.length ? calleeType.params[i]! : calleeType.restParam;
-            if (declared === null) continue;
-            const paramType = substitute(declared, subst);
-            if (!assignable(paramType, argTypes[i]!)) {
-              this.error(
-                `Arre yaar, argument ${i + 1} ka type '${typeName(paramType)}' hona chahiye, '${typeName(argTypes[i]!)}' nahi.`,
-                expr.args[i]!.span
-              );
-            }
-          }
-          return substitute(calleeType.returnType, subst);
-        }
-        for (let i = 0; i < expr.args.length; i++) {
-          const arg = expr.args[i]!;
-          if (arg.kind === "Spread") {
-            const spreadType = this.expr(arg.argument);
-            if (spreadType.kind !== "array" && spreadType.kind !== "koi") {
-              this.error(
-                `Arre yaar, '...' ke saath array hona chahiye, '${typeName(spreadType)}' nahi.`,
-                arg.span
-              );
-            }
-            continue;
-          }
-          const paramType = i < calleeType.params.length ? calleeType.params[i]! : calleeType.restParam;
-          if (paramType === null) {
-            this.expr(arg);
-            continue;
-          }
-          const argType = this.exprWithContext(arg, paramType);
-          if (!assignable(paramType, argType)) {
-            this.error(
-              `Arre yaar, argument ${i + 1} ka type '${typeName(paramType)}' hona chahiye, '${typeName(argType)}' nahi.`,
-              arg.span
-            );
-          }
-        }
-        return calleeType.returnType;
+        // `f?.()` skips the call when f is khaali, so its result may be khaali.
+        const result = this.callResult(expr);
+        return expr.optional && result.kind !== "koi" ? union([result, KHAALI]) : result;
       }
       case "Member": {
         const objectType = this.expr(expr.object);
@@ -487,16 +449,13 @@ export abstract class ExpressionChecker extends CheckerBase {
       case "Index": {
         const objectType = this.expr(expr.object);
         const indexType = this.expr(expr.index);
-        if (objectType.kind === "array") {
-          if (!isNumeric(indexType)) {
-            this.error(`Arre yaar, array ka index adad hona chahiye, '${typeName(indexType)}' nahi.`, expr.index.span);
-          }
-          return objectType.element;
+        if (expr.optional) {
+          // `xs?.[0]` — drop khaali, index the rest, and put khaali back.
+          if (objectType.kind === "khaali" || objectType.kind === "kuchnahi") return KHAALI;
+          const present = this.narrowExclude(objectType, KHAALI);
+          return union([this.indexInto(present, indexType, expr.index.span), KHAALI]);
         }
-        if (objectType.kind === "lafz" || (objectType.kind === "literal" && typeof objectType.value === "string")) {
-          return LAFZ;
-        }
-        return KOI;
+        return this.indexInto(objectType, indexType, expr.index.span);
       }
       case "Await":
         return unwrapWada(this.expr(expr.operand));
@@ -707,6 +666,117 @@ export abstract class ExpressionChecker extends CheckerBase {
           expr.span
         );
       }
+    }
+    return KOI;
+  }
+
+  /**
+   * Types a call: arity, argument types, generic inference. Shared by `f(x)`
+   * and `f?.(x)` — the caller adds khaali for the optional form.
+   */
+  private callResult(expr: Extract<Expr, { kind: "Call" }>): Type {
+    let calleeType = this.expr(expr.callee);
+    const checkArgsLoosely = (): void => {
+      for (const a of expr.args) {
+        if (a.kind === "Spread") this.expr(a.argument);
+        else this.expr(a);
+      }
+    };
+    if (expr.optional) {
+      if (calleeType.kind === "khaali" || calleeType.kind === "kuchnahi") {
+        checkArgsLoosely();
+        return KHAALI;
+      }
+      calleeType = this.narrowExclude(calleeType, KHAALI);
+    }
+    if (calleeType.kind === "koi") {
+      checkArgsLoosely();
+      return KOI;
+    }
+    if (calleeType.kind !== "function") {
+      checkArgsLoosely();
+      this.error(`Arre yaar, '${typeName(calleeType)}' ko call nahi kar sakte — yeh kaam nahi hai.`, expr.span);
+      return KOI;
+    }
+    const hasSpread = expr.args.some((a) => a.kind === "Spread");
+    if (!hasSpread) {
+      const min = calleeType.requiredParams;
+      const max = calleeType.restParam !== null ? Infinity : calleeType.params.length;
+      if (expr.args.length < min || expr.args.length > max) {
+        for (const a of expr.args) this.expr(a);
+        const want = min === max ? `${min}` : max === Infinity ? `kam az kam ${min}` : `${min} se ${max}`;
+        this.error(`Arre yaar, is kaam ko ${want} argument chahiye, ${expr.args.length} diye.`, expr.span);
+        return calleeType.returnType;
+      }
+    }
+    if (calleeType.typeParams.length > 0) {
+      // Generic call: type the arguments *in context* first (a lambda needs its
+      // parameter types — `xs.map(kaam (n) { … })` must see n: T, whose T is
+      // already concrete even though the result U is not), then infer from what
+      // came back.
+      const argTypes = expr.args.map((a, i) => {
+        if (a.kind === "Spread") return this.expr(a.argument);
+        const declared = i < calleeType.params.length ? calleeType.params[i]! : calleeType.restParam;
+        // Only a lambda gets context, and only when the parameter types it would
+        // inherit are already concrete: checking `[1, 2, 3]` against an
+        // uninstantiated `T[]` would reject perfectly good code.
+        const usable =
+          declared !== null &&
+          a.kind === "FunctionExpr" &&
+          declared.kind === "function" &&
+          !declared.params.some((p) => mentionsTypeParam(p, calleeType.typeParams));
+        return usable ? this.exprWithContext(a, declared) : this.expr(a);
+      });
+      const subst = inferTypeArguments(calleeType.typeParams, calleeType.params, argTypes);
+      for (let i = 0; i < argTypes.length; i++) {
+        if (expr.args[i]!.kind === "Spread") continue;
+        const declared = i < calleeType.params.length ? calleeType.params[i]! : calleeType.restParam;
+        if (declared === null) continue;
+        const paramType = substitute(declared, subst);
+        if (!assignable(paramType, argTypes[i]!)) {
+          this.error(
+            `Arre yaar, argument ${i + 1} ka type '${typeName(paramType)}' hona chahiye, '${typeName(argTypes[i]!)}' nahi.`,
+            expr.args[i]!.span
+          );
+        }
+      }
+      return substitute(calleeType.returnType, subst);
+    }
+    for (let i = 0; i < expr.args.length; i++) {
+      const arg = expr.args[i]!;
+      if (arg.kind === "Spread") {
+        const spreadType = this.expr(arg.argument);
+        if (spreadType.kind !== "array" && spreadType.kind !== "koi") {
+          this.error(`Arre yaar, '...' ke saath array hona chahiye, '${typeName(spreadType)}' nahi.`, arg.span);
+        }
+        continue;
+      }
+      const paramType = i < calleeType.params.length ? calleeType.params[i]! : calleeType.restParam;
+      if (paramType === null) {
+        this.expr(arg);
+        continue;
+      }
+      const argType = this.exprWithContext(arg, paramType);
+      if (!assignable(paramType, argType)) {
+        this.error(
+          `Arre yaar, argument ${i + 1} ka type '${typeName(paramType)}' hona chahiye, '${typeName(argType)}' nahi.`,
+          arg.span
+        );
+      }
+    }
+    return calleeType.returnType;
+  }
+
+  /** The element type behind `xs[i]`; shared with the optional form `xs?.[i]`. */
+  private indexInto(objectType: Type, indexType: Type, indexSpan: Span): Type {
+    if (objectType.kind === "array") {
+      if (!isNumeric(indexType)) {
+        this.error(`Arre yaar, array ka index adad hona chahiye, '${typeName(indexType)}' nahi.`, indexSpan);
+      }
+      return objectType.element;
+    }
+    if (objectType.kind === "lafz" || (objectType.kind === "literal" && typeof objectType.value === "string")) {
+      return LAFZ;
     }
     return KOI;
   }

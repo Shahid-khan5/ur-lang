@@ -38,6 +38,13 @@ export abstract class ExpressionParser extends ParserBase {
       case TokenKind.StarAssign: op = "*="; break;
       case TokenKind.SlashAssign: op = "/="; break;
       case TokenKind.PercentAssign: op = "%="; break;
+      case TokenKind.StarStarAssign: op = "**="; break;
+      case TokenKind.AmpAssign: op = "&="; break;
+      case TokenKind.PipeAssign: op = "|="; break;
+      case TokenKind.CaretAssign: op = "^="; break;
+      case TokenKind.ShlAssign: op = "<<="; break;
+      case TokenKind.ShrAssign: op = ">>="; break;
+      case TokenKind.UShrAssign: op = ">>>="; break;
       default: return left;
     }
     if (left.kind !== "Identifier" && left.kind !== "Member" && left.kind !== "Index") {
@@ -46,6 +53,13 @@ export abstract class ExpressionParser extends ParserBase {
     this.next();
     const value = this.assignment(); // right-associative
     return { kind: "Assignment", op, target: left, value, span: left.span };
+  }
+
+  /** `++`/`--` and `=` may only target a variable, property, or index. */
+  private requireAssignable(target: Expr, at: Token): void {
+    if (target.kind !== "Identifier" && target.kind !== "Member" && target.kind !== "Index") {
+      this.fail("Arre yaar, is cheez ko value assign nahi kar sakte.", at);
+    }
   }
 
   protected conditional(): Expr {
@@ -80,11 +94,43 @@ export abstract class ExpressionParser extends ParserBase {
   }
 
   protected logicalAnd(): Expr {
-    let left = this.equality();
+    let left = this.bitOr();
     while (this.at(TokenKind.AndAnd)) {
       this.next();
-      const right = this.equality();
+      const right = this.bitOr();
       left = { kind: "Logical", op: "&&", left, right, span: left.span };
+    }
+    return left;
+  }
+
+  // Bitwise tiers, in JS's order: | binds loosest, then ^, then &.
+
+  protected bitOr(): Expr {
+    let left = this.bitXor();
+    while (this.at(TokenKind.Pipe)) {
+      this.next();
+      const right = this.bitXor();
+      left = { kind: "Binary", op: "|", left, right, span: left.span };
+    }
+    return left;
+  }
+
+  protected bitXor(): Expr {
+    let left = this.bitAnd();
+    while (this.at(TokenKind.Caret)) {
+      this.next();
+      const right = this.bitAnd();
+      left = { kind: "Binary", op: "^", left, right, span: left.span };
+    }
+    return left;
+  }
+
+  protected bitAnd(): Expr {
+    let left = this.equality();
+    while (this.at(TokenKind.Amp)) {
+      this.next();
+      const right = this.equality();
+      left = { kind: "Binary", op: "&", left, right, span: left.span };
     }
     return left;
   }
@@ -101,15 +147,33 @@ export abstract class ExpressionParser extends ParserBase {
     }
   }
 
+  /** Relational: `< > <= >=` plus the keyword operators `hai` and `andar`. */
   protected comparison(): Expr {
-    let left = this.additive();
+    let left = this.shift();
     for (;;) {
       const t = this.peek();
-      let op: "<" | ">" | "<=" | ">=" | null = null;
+      let op: Extract<import("../ast.js").Binary["op"], "<" | ">" | "<=" | ">=" | "hai" | "andar"> | null = null;
       if (t.kind === TokenKind.Lt) op = "<";
       else if (t.kind === TokenKind.Gt) op = ">";
       else if (t.kind === TokenKind.LtEq) op = "<=";
       else if (t.kind === TokenKind.GtEq) op = ">=";
+      else if (t.kind === TokenKind.Hai) op = "hai";
+      else if (t.kind === TokenKind.Andar) op = "andar";
+      if (op === null) return left;
+      this.next();
+      const right = this.shift();
+      left = { kind: "Binary", op, left, right, span: left.span };
+    }
+  }
+
+  protected shift(): Expr {
+    let left = this.additive();
+    for (;;) {
+      const t = this.peek();
+      let op: "<<" | ">>" | ">>>" | null = null;
+      if (t.kind === TokenKind.Shl) op = "<<";
+      else if (t.kind === TokenKind.Shr) op = ">>";
+      else if (t.kind === TokenKind.UShr) op = ">>>";
       if (op === null) return left;
       this.next();
       const right = this.additive();
@@ -130,7 +194,7 @@ export abstract class ExpressionParser extends ParserBase {
   }
 
   protected multiplicative(): Expr {
-    let left = this.unary();
+    let left = this.exponent();
     for (;;) {
       const t = this.peek();
       let op: "*" | "/" | "%" | null = null;
@@ -139,9 +203,18 @@ export abstract class ExpressionParser extends ParserBase {
       else if (t.kind === TokenKind.Percent) op = "%";
       if (op === null) return left;
       this.next();
-      const right = this.unary();
+      const right = this.exponent();
       left = { kind: "Binary", op, left, right, span: left.span };
     }
+  }
+
+  /** `**` binds tighter than `*` and is right-associative, as in JS. */
+  protected exponent(): Expr {
+    const left = this.unary();
+    if (!this.at(TokenKind.StarStar)) return left;
+    this.next();
+    const right = this.exponent(); // right-associative
+    return { kind: "Binary", op: "**", left, right, span: left.span };
   }
 
   protected unary(): Expr {
@@ -150,6 +223,34 @@ export abstract class ExpressionParser extends ParserBase {
       this.next();
       const operand = this.unary();
       return { kind: "Unary", op: t.kind === TokenKind.Minus ? "-" : "!", operand, span: this.span(t) };
+    }
+    if (t.kind === TokenKind.Tilde) {
+      this.next();
+      return { kind: "Unary", op: "~", operand: this.unary(), span: this.span(t) };
+    }
+    if (t.kind === TokenKind.Noeyat) {
+      this.next();
+      return { kind: "Unary", op: "noeyat", operand: this.unary(), span: this.span(t) };
+    }
+    if (t.kind === TokenKind.Mitao) {
+      this.next();
+      const target = this.unary();
+      if (target.kind !== "Member" && target.kind !== "Index") {
+        this.fail("Arre yaar, 'mitao' sirf property ya index pe chalta hai (jaise mitao o.a;).", t);
+      }
+      return { kind: "DeleteExpr", target, span: this.span(t) };
+    }
+    if (t.kind === TokenKind.PlusPlus || t.kind === TokenKind.MinusMinus) {
+      this.next();
+      const target = this.unary();
+      this.requireAssignable(target, t);
+      return {
+        kind: "Update",
+        op: t.kind === TokenKind.PlusPlus ? "++" : "--",
+        prefix: true,
+        target,
+        span: this.span(t),
+      };
     }
     if (t.kind === TokenKind.Intezar) {
       this.next();
@@ -163,7 +264,8 @@ export abstract class ExpressionParser extends ParserBase {
   protected postfix(): Expr {
     let expr = this.primary();
     for (;;) {
-      if (this.at(TokenKind.LParen)) {
+      if (this.at(TokenKind.LParen) || this.at(TokenKind.QuestionDotLParen)) {
+        const optional = this.at(TokenKind.QuestionDotLParen);
         this.next();
         const args: Expr[] = [];
         if (!this.at(TokenKind.RParen)) {
@@ -178,7 +280,7 @@ export abstract class ExpressionParser extends ParserBase {
           } while (this.matchListComma(TokenKind.RParen));
         }
         this.expect(TokenKind.RParen, ")");
-        expr = { kind: "Call", callee: expr, args, span: expr.span };
+        expr = { kind: "Call", callee: expr, args, optional, span: expr.span };
       } else if (this.at(TokenKind.Dot)) {
         this.next();
         const prop = this.expect(TokenKind.Identifier, "property ka naam");
@@ -187,11 +289,22 @@ export abstract class ExpressionParser extends ParserBase {
         this.next();
         const prop = this.expect(TokenKind.Identifier, "property ka naam");
         expr = { kind: "Member", object: expr, property: prop.value, optional: true, span: expr.span };
-      } else if (this.at(TokenKind.LBracket)) {
+      } else if (this.at(TokenKind.LBracket) || this.at(TokenKind.QuestionDotLBracket)) {
+        const optional = this.at(TokenKind.QuestionDotLBracket);
         this.next();
         const index = this.expression();
         this.expect(TokenKind.RBracket, "]");
-        expr = { kind: "Index", object: expr, index, span: expr.span };
+        expr = { kind: "Index", object: expr, index, optional, span: expr.span };
+      } else if (this.at(TokenKind.PlusPlus) || this.at(TokenKind.MinusMinus)) {
+        const t2 = this.next();
+        this.requireAssignable(expr, t2);
+        expr = {
+          kind: "Update",
+          op: t2.kind === TokenKind.PlusPlus ? "++" : "--",
+          prefix: false,
+          target: expr,
+          span: expr.span,
+        };
       } else {
         return expr;
       }
@@ -214,6 +327,9 @@ export abstract class ExpressionParser extends ParserBase {
       case TokenKind.String:
         this.next();
         return { kind: "StringLiteral", value: t.value, span: this.span(t) };
+      case TokenKind.Regex:
+        this.next();
+        return { kind: "RegexLiteral", raw: t.value, span: this.span(t) };
       case TokenKind.Sach:
         this.next();
         return { kind: "BooleanLiteral", value: true, span: this.span(t) };

@@ -50,7 +50,9 @@ describe("lexer", () => {
   });
 
   it("tokenizes all operators", () => {
-    expect(kinds("= += -= *= /= %= + - * / % == != < > <= >= && || !")).toEqual([
+    // `/` is deliberately absent: like every JS lexer, we can only tell division
+    // from a regex literal by position, so it needs an operand before it (below).
+    expect(kinds("= += -= *= /= %= + - * % ** == != < > <= >= && || ! ?? ++ -- & | ^ ~ << >> >>>")).toEqual([
       TokenKind.Assign,
       TokenKind.PlusAssign,
       TokenKind.MinusAssign,
@@ -60,8 +62,8 @@ describe("lexer", () => {
       TokenKind.Plus,
       TokenKind.Minus,
       TokenKind.Star,
-      TokenKind.Slash,
       TokenKind.Percent,
+      TokenKind.StarStar,
       TokenKind.EqEq,
       TokenKind.NotEq,
       TokenKind.Lt,
@@ -71,8 +73,30 @@ describe("lexer", () => {
       TokenKind.AndAnd,
       TokenKind.OrOr,
       TokenKind.Bang,
+      TokenKind.QuestionQuestion,
+      TokenKind.PlusPlus,
+      TokenKind.MinusMinus,
+      TokenKind.Amp,
+      TokenKind.Pipe,
+      TokenKind.Caret,
+      TokenKind.Tilde,
+      TokenKind.Shl,
+      TokenKind.Shr,
+      TokenKind.UShr,
       TokenKind.EOF,
     ]);
+  });
+
+  it("distinguishes division from a regex literal by position", () => {
+    // After an operand, `/` divides…
+    expect(kinds("a / b")).toEqual([TokenKind.Identifier, TokenKind.Slash, TokenKind.Identifier, TokenKind.EOF]);
+    expect(kinds("(a) / 2")).toContain(TokenKind.Slash);
+    // …but in operand position it opens a regex.
+    const toks = tokenize("rakho re = /ab+c/gi;");
+    expect(toks[3]!.kind).toBe(TokenKind.Regex);
+    expect(toks[3]!.value).toBe("/ab+c/gi");
+    // A slash inside a character class does not end it.
+    expect(tokenize("rakho re = /[/]/;")[3]!.value).toBe("/[/]/");
   });
 
   it("tokenizes punctuation", () => {

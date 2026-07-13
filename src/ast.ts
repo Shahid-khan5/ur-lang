@@ -48,7 +48,10 @@ export type Expr =
   | SuperCall
   | SuperMember
   | JsxElement
-  | JsxFragment;
+  | JsxFragment
+  | Update
+  | DeleteExpr
+  | RegexLiteral;
 
 export interface NumberLiteral { kind: "NumberLiteral"; value: number; raw: string; span: Span }
 export interface StringLiteral { kind: "StringLiteral"; value: string; span: Span }
@@ -65,24 +68,36 @@ export interface ObjectLiteral {
   properties: ObjectEntry[];
   span: Span;
 }
-export interface Unary { kind: "Unary"; op: "-" | "!"; operand: Expr; span: Span }
+export interface Unary { kind: "Unary"; op: "-" | "!" | "~" | "noeyat"; operand: Expr; span: Span }
 export interface Binary {
   kind: "Binary";
-  op: "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | ">" | "<=" | ">=";
+  op:
+    | "+" | "-" | "*" | "/" | "%" | "**"
+    | "==" | "!=" | "<" | ">" | "<=" | ">="
+    | "&" | "|" | "^" | "<<" | ">>" | ">>>"
+    | "hai" | "andar";
   left: Expr;
   right: Expr;
   span: Span;
 }
+/** `i++` / `--i` — target must be a mutable adad. */
+export interface Update { kind: "Update"; op: "++" | "--"; prefix: boolean; target: Expr; span: Span }
+/** `mitao o.a;` → `delete o.a` */
+export interface DeleteExpr { kind: "DeleteExpr"; target: Expr; span: Span }
+/** `/ab+c/gi` — kept verbatim and emitted as-is. */
+export interface RegexLiteral { kind: "RegexLiteral"; raw: string; span: Span }
 /** `&&`/`||` take bools; `??` takes anything and falls back when the left is khaali. */
 export interface Logical { kind: "Logical"; op: "&&" | "||" | "??"; left: Expr; right: Expr; span: Span }
 export interface Assignment {
   kind: "Assignment";
-  op: "=" | "+=" | "-=" | "*=" | "/=" | "%=";
+  op:
+    | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**="
+    | "&=" | "|=" | "^=" | "<<=" | ">>=" | ">>>=";
   target: Expr; // Identifier | Member | Index — validated by the parser
   value: Expr;
   span: Span;
 }
-export interface Call { kind: "Call"; callee: Expr; args: Expr[]; span: Span }
+export interface Call { kind: "Call"; callee: Expr; args: Expr[]; optional: boolean; span: Span }
 export interface Member {
   kind: "Member";
   object: Expr;
@@ -90,7 +105,7 @@ export interface Member {
   optional: boolean; // ?. access
   span: Span;
 }
-export interface Index { kind: "Index"; object: Expr; index: Expr; span: Span }
+export interface Index { kind: "Index"; object: Expr; index: Expr; optional: boolean; span: Span }
 export interface Await { kind: "Await"; operand: Expr; span: Span }
 export interface FunctionExpr {
   kind: "FunctionExpr";

@@ -11,30 +11,51 @@ export interface CodegenOptions {
 }
 
 // Operator precedence, used to insert parentheses only where needed.
+// JS's binding order. `??` shares ||'s tier but may not be mixed with it
+// unparenthesized — logicalOperand() handles that.
 const PRECEDENCE: Record<string, number> = {
-  "??": 1, // JS forbids mixing ?? with &&/|| unparenthesized; we always parenthesize
+  "??": 1,
   "||": 1,
   "&&": 2,
-  "==": 3,
-  "!=": 3,
-  "<": 4,
-  ">": 4,
-  "<=": 4,
-  ">=": 4,
-  "+": 5,
-  "-": 5,
-  "*": 6,
-  "/": 6,
-  "%": 6,
+  "|": 3,
+  "^": 4,
+  "&": 5,
+  "==": 6,
+  "!=": 6,
+  "<": 7,
+  ">": 7,
+  "<=": 7,
+  ">=": 7,
+  hai: 7, // instanceof
+  andar: 7, // in
+  "<<": 8,
+  ">>": 8,
+  ">>>": 8,
+  "+": 9,
+  "-": 9,
+  "*": 10,
+  "/": 10,
+  "%": 10,
+  "**": 11,
 };
+
+/** JS spellings for the operators UrLang names in Urdu. */
+const JS_OPERATOR: Record<string, string> = {
+  hai: "instanceof",
+  andar: "in",
+  noeyat: "typeof",
+};
+
+const UNARY_PRECEDENCE = 12;
+const ATOM_PRECEDENCE = 13;
 
 function exprPrecedence(e: Expr): number {
   switch (e.kind) {
     case "Assignment": return 0;
     case "Logical":
     case "Binary": return PRECEDENCE[e.op]!;
-    case "Unary": return 7;
-    default: return 8; // literals, identifiers, calls, member/index — atomic
+    case "Unary": return UNARY_PRECEDENCE;
+    default: return ATOM_PRECEDENCE; // literals, identifiers, calls, member/index
   }
 }
 
@@ -481,19 +502,44 @@ class Codegen {
         return;
       }
       case "Unary": {
-        const needsParens = parentPrecedence > 7;
+        const needsParens = parentPrecedence > UNARY_PRECEDENCE;
         if (needsParens) this.write("(");
-        this.write(e.op);
-        this.expr(e.operand, 7);
+        // `noeyat x` → `typeof x` needs the space; `-x` / `!x` / `~x` do not.
+        const op = JS_OPERATOR[e.op] ?? e.op;
+        this.write(op.length > 1 ? `${op} ` : op);
+        this.expr(e.operand, UNARY_PRECEDENCE);
         if (needsParens) this.write(")");
         return;
       }
+      case "Update": {
+        const needsParens = parentPrecedence > UNARY_PRECEDENCE;
+        if (needsParens) this.write("(");
+        if (e.prefix) this.write(e.op);
+        this.expr(e.target, ATOM_PRECEDENCE);
+        if (!e.prefix) this.write(e.op);
+        if (needsParens) this.write(")");
+        return;
+      }
+      case "DeleteExpr": {
+        const needsParens = parentPrecedence > UNARY_PRECEDENCE;
+        if (needsParens) this.write("(");
+        this.write("delete ");
+        this.expr(e.target, UNARY_PRECEDENCE);
+        if (needsParens) this.write(")");
+        return;
+      }
+      case "RegexLiteral":
+        this.write(e.raw);
+        return;
       case "Binary":
       case "Logical": {
         const prec = PRECEDENCE[e.op]!;
         const needsParens = prec < parentPrecedence;
         if (needsParens) this.write("(");
-        this.logicalOperand(e.left, e.op, prec);
+        // `**` is right-associative: the *left* child of equal precedence needs
+        // the parens, the right one does not.
+        const rightAssoc = e.kind === "Binary" && e.op === "**";
+        this.logicalOperand(e.left, e.op, rightAssoc ? prec + 1 : prec);
         // khaali means null-or-undefined, so equality with khaali is loose
         // (x == null matches undefined too); everything else is strict.
         const khaaliCompare =
@@ -501,25 +547,25 @@ class Codegen {
         const jsOp =
           e.op === "==" ? (khaaliCompare ? "==" : "===")
           : e.op === "!=" ? (khaaliCompare ? "!=" : "!==")
-          : e.op;
+          : JS_OPERATOR[e.op] ?? e.op;
         this.write(` ${jsOp} `);
         // left-associative: parenthesize equal-precedence right children
-        this.logicalOperand(e.right, e.op, prec + 1);
+        this.logicalOperand(e.right, e.op, rightAssoc ? prec : prec + 1);
         if (needsParens) this.write(")");
         return;
       }
       case "Assignment": {
         const needsParens = parentPrecedence > 0;
         if (needsParens) this.write("(");
-        this.expr(e.target, 8);
+        this.expr(e.target, ATOM_PRECEDENCE);
         this.write(` ${e.op} `);
         this.expr(e.value, 0);
         if (needsParens) this.write(")");
         return;
       }
       case "Call":
-        this.expr(e.callee, 8);
-        this.write("(");
+        this.expr(e.callee, ATOM_PRECEDENCE);
+        this.write(e.optional ? "?.(" : "(");
         e.args.forEach((arg, i) => {
           if (i > 0) this.write(", ");
           this.expr(arg, 0);
@@ -527,20 +573,20 @@ class Codegen {
         this.write(")");
         return;
       case "Member":
-        this.expr(e.object, 8);
+        this.expr(e.object, ATOM_PRECEDENCE);
         this.write(`${e.optional ? "?." : "."}${e.property}`);
         return;
       case "Index":
-        this.expr(e.object, 8);
-        this.write("[");
+        this.expr(e.object, ATOM_PRECEDENCE);
+        this.write(e.optional ? "?.[" : "[");
         this.expr(e.index, 0);
         this.write("]");
         return;
       case "Await": {
-        const needsParens = parentPrecedence > 7;
+        const needsParens = parentPrecedence > UNARY_PRECEDENCE;
         if (needsParens) this.write("(");
         this.write("await ");
-        this.expr(e.operand, 7);
+        this.expr(e.operand, UNARY_PRECEDENCE);
         if (needsParens) this.write(")");
         return;
       }

@@ -88,6 +88,36 @@ export enum TokenKind {
   OrOr,
   QuestionQuestion, // ?? (nullish coalescing — pairs with ?.)
   Bang,
+  // Increment / decrement
+  PlusPlus,
+  MinusMinus,
+  // Exponent
+  StarStar,
+  StarStarAssign,
+  // Bitwise
+  Amp, // &
+  Caret, // ^
+  Tilde, // ~
+  Shl, // <<
+  Shr, // >>
+  UShr, // >>>
+  AmpAssign,
+  PipeAssign,
+  CaretAssign,
+  ShlAssign,
+  ShrAssign,
+  UShrAssign,
+  // Operator keywords
+  Noeyat, // typeof
+  Hai, // instanceof
+  Andar, // in
+  Mitao, // delete
+  /** A regex literal, e.g. /ab+c/gi — value holds the whole literal. */
+  Regex,
+  /** `?.(` — optional call */
+  QuestionDotLParen,
+  /** `?.[` — optional index */
+  QuestionDotLBracket,
 }
 
 export interface Token {
@@ -134,4 +164,8 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ["yeh", TokenKind.Yeh],
   ["waris", TokenKind.Waris],
   ["buzurg", TokenKind.Buzurg],
+  ["noeyat", TokenKind.Noeyat],
+  ["hai", TokenKind.Hai],
+  ["andar", TokenKind.Andar],
+  ["mitao", TokenKind.Mitao],
 ]);
